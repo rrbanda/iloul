@@ -27,17 +27,17 @@ An intelligent loan underwriting system will demonstrate AI agent collaboration 
 
 ### Core Value Propositions
 
-**For FSI Customers:**
+**For Mortgage Lenders:**
 - Reduced processing time from weeks to days
 - Improved consistency in underwriting decisions
 - Enhanced compliance through automated regulatory checks
 - Better borrower experience with real-time status updates
 
-**For Platform Demonstration:**
-- Showcases OpenShift AI capabilities in a realistic business scenario
-- Demonstrates model-as-a-service scaling for document processing
-- Highlights trusted AI features through explainable underwriting decisions
-- Shows integration patterns for financial services compliance requirements
+**Platform Capabilities Showcase:**
+- Demonstrates OpenShift AI in realistic financial services scenarios
+- Highlights model-as-a-service scaling for document processing workloads
+- Showcases trusted AI through explainable underwriting decisions
+- Illustrates integration patterns for regulatory compliance requirements
 
 ## Scope Considerations
 
@@ -101,3 +101,6 @@ The documentation will proceed through detailed business process analysis for bo
 - Under-representing the complexity FSI customers actually face
 - Misalignment between technical capabilities and business value demonstration
 
+I welcome feedback on this understanding before proceeding with detailed technical specifications. The goal is ensuring our solution addresses real customer needs while effectively showcasing platform capabilities.
+
+---
