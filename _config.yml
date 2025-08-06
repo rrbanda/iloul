@@ -1,26 +1,15 @@
 title: Intelligent Loan Underwriting (ILOUL)
 description: AI Agent Capabilities for Financial Services Workflows
-baseurl: "/iloul"
-url: "https://rrbanda.github.io"
 
-# Use a better theme
-remote_theme: pages-themes/cayman@v0.2.0
+# Use GitHub's built-in theme
+theme: minima
+
+# Enable plugins
 plugins:
-- jekyll-remote-theme
+  - jekyll-feed
+  - jekyll-sitemap
 
-# Navigation structure
-header_pages:
-  - docs/01-use-case-overview.md
-  - docs/02-business-process-full.md
-  - docs/03-business-process-simplified.md
-
-# Enable Mermaid diagrams
 markdown: kramdown
 kramdown:
   input: GFM
   syntax_highlighter: rouge
-
-# GitHub Pages settings
-github:
-  repository_name: iloul
-  owner_name: rrbanda
