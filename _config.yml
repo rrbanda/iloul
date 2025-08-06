@@ -1,15 +1,9 @@
-title: Intelligent Loan Underwriting (ILOUL)
-description: AI Agent Capabilities for Financial Services Workflows
-
-# Use GitHub's built-in theme
+title: "Intelligent Loan Underwriting"
+description: "AI Agent Capabilities for Financial Services"
 theme: minima
 
-# Enable plugins
+markdown: kramdown
+highlighter: rouge
+
 plugins:
   - jekyll-feed
-  - jekyll-sitemap
-
-markdown: kramdown
-kramdown:
-  input: GFM
-  syntax_highlighter: rouge
