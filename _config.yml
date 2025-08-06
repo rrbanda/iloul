@@ -1,9 +1,0 @@
-title: "Intelligent Loan Underwriting"
-description: "AI Agent Capabilities for Financial Services"
-theme: minima
-
-markdown: kramdown
-highlighter: rouge
-
-plugins:
-  - jekyll-feed
