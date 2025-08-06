@@ -22,3 +22,4 @@ title: Home
 **Phase 1 Complete**: Business process analysis and workflow documentation ready for stakeholder review.
 
 **Next Phase**: AI agent architecture and technical implementation design.
+
