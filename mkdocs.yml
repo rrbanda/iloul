@@ -8,7 +8,6 @@ nav:
   - Use Case Overview: 01-use-case-overview.md
   - Comprehensive Process: 02-business-process-full.md
   - Simplified Process: 03-business-process-simplified.md
-  - Process Flowcharts: flowcharts.md
 
 theme:
   name: material
