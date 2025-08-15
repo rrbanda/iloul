@@ -1,0 +1,165 @@
+app:
+  session_name: "mortgage_processing_session"
+  debug: true
+
+llama:
+  base_url: "http://lss-ai-agent.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
+  model_id: "meta-llama/Llama-3.1-8B-Instruct"
+  instructions: |
+    You are a specialized mortgage document processing agent. 
+    You help validate mortgage application documents, extract relevant information, 
+    and guide users through the application process.
+    Always be thorough, accurate, and professional in your responses.
+
+vector_db:
+  id: "mortgage_docs"
+  provider: "faiss"
+  embedding: "all-MiniLM-L6-v2"
+  embedding_dimension: 384
+  chunk_size: 512
+
+database:
+  host: "localhost"
+  port: 5432
+  database: "mortgage_db"
+  username: "postgres"
+  password: "password"
+
+mortgage:
+  max_document_size_mb: 10
+  allowed_document_types: [".pdf", ".jpg", ".jpeg", ".png"]
+  validation_timeout_seconds: 30
+  
+  # Required documents by loan type
+  required_documents:
+    HomeLoan:
+      - document_type: "driver_license"
+        quantity: 1
+        description: "Valid government-issued photo ID"
+      - document_type: "bank_statement"
+        quantity: 2
+        description: "2 years of bank statements"
+      - document_type: "tax_statement"
+        quantity: 2
+        description: "2 years of tax returns"
+      - document_type: "pay_stub"
+        quantity: 1
+        description: "1 year of pay stubs"
+    WorkingCapital:
+      - document_type: "bank_statement"
+        quantity: 2
+        description: "2 years of business bank statements"
+      - document_type: "tax_statement"
+        quantity: 2
+        description: "2 years of business tax returns"
+      - document_type: "driver_license"
+        quantity: 1
+        description: "Valid government-issued photo ID"
+  
+  # Validation rules
+  validation_rules:
+    driver_license:
+      max_days_until_expiry: 30
+      acceptable_alternatives: ["passport"]
+    bank_statement:
+      max_age_months: 24
+      required_fields: ["account_balance", "monthly_deposits"]
+    tax_statement:
+      max_age_years: 2
+      required_fields: ["annual_gross_income", "filing_status"]
+    pay_stub:
+      max_age_months: 12
+      required_fields: ["gross_pay", "employer_name"]
+  
+  # Processing prompts and instructions
+  prompts:
+    system_prompt: |
+      You are a specialized mortgage document processing agent with expertise in:
+      - Document classification and validation
+      - Financial data extraction and verification
+      - Regulatory compliance for mortgage applications
+      - Risk assessment and quality control
+      
+      Your goal is to thoroughly process mortgage applications while ensuring accuracy,
+      compliance, and excellent customer experience.
+    
+    processing_instructions: |
+      PROCESSING WORKFLOW:
+      1. Analyze each document systematically
+      2. Classify document types with confidence scoring
+      3. Validate document quality and readability
+      4. Extract relevant personal and financial information
+      5. Check expiration dates and document currency
+      6. Cross-validate information for consistency
+      7. Assess overall application completeness
+      8. Generate recommendations and next steps
+      
+      QUALITY STANDARDS:
+      - All extractions must have confidence scores ≥ 0.70
+      - Document quality scores must be ≥ 0.60 for acceptance
+      - Personal information must be consistent across documents
+      - Financial documents must be within acceptable age limits
+      
+      COMPLIANCE REQUIREMENTS:
+      - Verify all required documents are present
+      - Ensure identification documents are current
+      - Validate income documentation completeness
+      - Check authorization for credit checks
+    
+    validation_prompt_template: |
+      Process this mortgage application step by step:
+      
+      CUSTOMER INFORMATION:
+      - Name: {customer_name}
+      - Age: {customer_age}
+      - Loan Type: {loan_type}
+      - Credit Check Authorized: {credit_authorized}
+      - Application ID: {application_id}
+      
+      DOCUMENTS TO PROCESS ({document_count} total):
+      {document_list}
+      
+      REQUIRED DOCUMENTS FOR {loan_type}:
+      {required_documents}
+      
+      VALIDATION RULES:
+      {validation_rules}
+      
+      Execute the processing workflow systematically, calling appropriate tools for each step.
+      Provide detailed reasoning for each decision and comprehensive final recommendations.
+    
+    document_template: |
+      Document {index}:
+      - Filename: {file_name}
+      - Size: {file_size} bytes
+      - Type: {mime_type}
+      - Content Preview: {content_preview}
+    
+    completion_messages:
+      success: "Mortgage application processing completed successfully"
+      partial_success: "Mortgage application processing completed with some issues"
+      failure: "Mortgage application processing failed - manual review required"
+      missing_documents: "Additional documents required to complete processing"
+    
+    next_steps:
+      document_issues:
+        - "Review flagged documents with customer"
+        - "Request higher quality scans if needed"
+        - "Obtain missing or expired documents"
+      processing_complete:
+        - "Review all validated documents"
+        - "Generate URLA 1003 form"
+        - "Submit to underwriting team"
+        - "Schedule customer follow-up if needed"
+      manual_review:
+        - "Escalate to senior processor"
+        - "Contact customer for clarification"
+        - "Request additional documentation"
+
+# Response formatting
+response_format:
+  include_confidence_scores: true
+  include_processing_steps: true
+  include_agent_reasoning: true
+  max_reasoning_length: 1000
+  timestamp_format: "ISO"
