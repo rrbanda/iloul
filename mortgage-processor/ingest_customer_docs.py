@@ -27,18 +27,18 @@ def ingest_customer_documents():
             embedding_dimension=int(config.vector_db.embedding_dimension),
             provider_id=config.vector_db.provider,
         )
-        print(f"✅ Vector DB '{config.vector_db.id}' ready")
+        print(f" Vector DB '{config.vector_db.id}' ready")
     except Exception as e:
         if "already exists" in str(e).lower():
-            print(f"✅ Vector DB '{config.vector_db.id}' already exists")
+            print(f" Vector DB '{config.vector_db.id}' already exists")
         else:
-            print(f"❌ Vector DB error: {e}")
+            print(f" Vector DB error: {e}")
             return
     
     # Find all customer documents
     docs_dir = Path("customer_docs")
     if not docs_dir.exists():
-        print("❌ customer_docs directory not found")
+        print(" customer_docs directory not found")
         return
     
     rag_documents = []
@@ -83,10 +83,10 @@ def ingest_customer_documents():
             print(f"📄 Prepared: {customer_name} - {doc_type}")
             
         except Exception as e:
-            print(f"❌ Error processing {md_file.name}: {e}")
+            print(f" Error processing {md_file.name}: {e}")
     
     if not rag_documents:
-        print("❌ No documents to ingest")
+        print(" No documents to ingest")
         return
     
     # Ingest into RAG
@@ -117,7 +117,7 @@ def ingest_customer_documents():
                 print(f"      📋 {doc_type}")
         
     except Exception as e:
-        print(f"❌ Ingestion failed: {e}")
+        print(f" Ingestion failed: {e}")
 
 if __name__ == "__main__":
     ingest_customer_documents()

@@ -3,8 +3,8 @@ app:
   debug: true
 
 llama:
-  base_url: "http://lss-ai-agent.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
-  model_id: "meta-llama/Llama-3.1-8B-Instruct"
+  base_url: "https://lss-lss.apps.prod.rhoai.rh-aiservices-bu.com"
+  model_id: "llama-4-scout-17b-16e-w4a16"
   instructions: |
     You are a specialized mortgage document processing agent. 
     You help validate mortgage application documents, extract relevant information, 

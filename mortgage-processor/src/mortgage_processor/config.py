@@ -108,7 +108,7 @@ class AppConfig(BaseModel):
         return cfg
 
     @classmethod
-    def load(cls, path: str | None = None) -> "AppConfig":
+    def load(cls, path: Optional[str] = None) -> "AppConfig":
         """Load configuration from YAML file, then apply environment variable overrides."""
         if path is None:
             possible_paths = [

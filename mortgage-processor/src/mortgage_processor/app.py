@@ -142,7 +142,7 @@ async def startup():
         _agent = create_mortgage_agent(_config)
         logger.info("Mortgage processing agent initialized successfully")
         
-        logger.info("🚀 Stateless Mortgage Processing API is ready!")
+        logger.info(" Stateless Mortgage Processing API is ready!")
         
     except Exception as e:
         logger.error(f"Startup error: {e}", exc_info=True)
@@ -238,7 +238,7 @@ async def process_mortgage_documents(request: ProcessMortgageRequest):
             session_id=processing_result.get("session_id", "unknown")
         )
         
-        logger.info(f"✅ Completed processing {application_id}: {response.processing_status}")
+        logger.info(f" Completed processing {application_id}: {response.processing_status}")
         return response
         
     except ValidationError as e:

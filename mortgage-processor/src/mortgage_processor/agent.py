@@ -103,14 +103,15 @@ Content: {content}"""
         
         prompt += """
 
-Please use your tools to:
-1. Classify each document type
-2. Check document quality
-3. Extract personal information
-4. Validate expiration dates
-5. Provide a summary of findings
+IMPORTANT: You MUST use the available tools to process these documents. Call each tool step by step:
 
-Start by using classify_document_type for the first document."""
+1. FIRST: Call classify_document_type(document_content="...", file_name="...") for each document
+2. THEN: Call check_document_quality(document_content="...") for each document  
+3. NEXT: Call extract_personal_information(document_content="...") for relevant documents
+4. ALSO: Call validate_document_expiration(document_content="...") for each document
+5. FINALLY: Call cross_validate_documents(documents=["..."]) to compare information
+
+Start now by calling classify_document_type for the first document with its content."""
         
         try:
             logger.info(f"Processing mortgage application for {customer.get('name', 'Unknown')}")

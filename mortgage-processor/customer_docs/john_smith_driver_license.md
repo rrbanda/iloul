@@ -15,4 +15,4 @@
 ## Previous Application History
 - Applied for home loan in 2023 (approved)
 - Clean driving record
-- Identity verified ✅
+- Identity verified 
