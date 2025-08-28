@@ -3,9 +3,10 @@ import uuid
 import logging
 from typing import Dict, List, Any, Optional
 from llama_stack_client import LlamaStackClient, Agent
-from llama_stack_client.lib.agents.event_logger import EventLogger
 
 from .config import AppConfig
+from .preprocessor import DocumentPreprocessor
+from .postprocessor import ResponsePostprocessor
 from .tools import (
     classify_document_type,
     validate_document_expiration,
@@ -14,7 +15,8 @@ from .tools import (
     check_document_quality,
     authorize_credit_check,
     generate_urla_1003_form,
-    cross_validate_documents
+    cross_validate_documents,
+    get_current_date_time
 )
 
 logger = logging.getLogger(__name__)
@@ -27,28 +29,29 @@ class MortgageProcessingAgent:
     
     def __init__(self, config: AppConfig):
         self.config = config
+        self.preprocessor = DocumentPreprocessor(config)
+        self.postprocessor = ResponsePostprocessor(config)
         self.client = LlamaStackClient(
-            base_url=config.llama.base_url,
+            base_url=config.llamastack.base_url,
             provider_data={}
         )
+        
+        # Get agent config and resolve instructions template
+        agent_config = config.get_mortgage_agent()
+        instructions = agent_config.instructions if agent_config else config.get_agent_instructions("mortgage_processing")
+        
+        # Resolve template if needed
+        if instructions.startswith("{") and instructions.endswith("}"):
+            # Parse template like {agent_instructions.chat_conversation}
+            template_parts = instructions.strip("{}").split(".")
+            if len(template_parts) == 2 and template_parts[0] == "agent_instructions":
+                instructions = config.get_agent_instructions(template_parts[1])
         
         # Create regular Agent with tools
         self.agent = Agent(
             client=self.client,
-            model=config.llama.model_id,
-            instructions=f"""{config.llama.instructions}
-
-When processing mortgage documents, use these tools systematically:
-- classify_document_type: Identify the type of document
-- check_document_quality: Assess document readability and quality
-- extract_personal_information: Extract personal details from documents
-- extract_income_information: Extract financial information from documents
-- validate_document_expiration: Check if documents are expired
-- authorize_credit_check: Process credit check authorizations
-- cross_validate_documents: Compare information across documents
-- generate_urla_1003_form: Create URLA 1003 forms
-
-Always use appropriate tools when analyzing documents.""",
+            model=config.llamastack.default_model,
+            instructions=instructions,
             tools=[
                 classify_document_type,
                 validate_document_expiration,
@@ -57,19 +60,17 @@ Always use appropriate tools when analyzing documents.""",
                 check_document_quality,
                 authorize_credit_check,
                 generate_urla_1003_form,
-                cross_validate_documents
+                cross_validate_documents,
+                get_current_date_time
             ],
-            sampling_params={
-                "strategy": {"type": "greedy"},
-                "max_tokens": 2048,
-            }
+            sampling_params=config.get_sampling_params()
         )
         
         logger.info(f"Initialized MortgageProcessingAgent with regular Agent")
     
     def create_session(self) -> str:
         """Create a new processing session."""
-        session_id = f"mortgage-session-{uuid.uuid4().hex}"
+        session_id = self.config.get_session_id_format().format(uuid.uuid4().hex)
         return self.agent.create_session(session_id)
     
     def process_mortgage_application(
@@ -84,9 +85,17 @@ Always use appropriate tools when analyzing documents.""",
         if not session_id:
             session_id = self.create_session()
         
-        customer = application_data.get("customer", {})
+        # Validate input data before processing
+        validation_result = self.preprocessor.validate_input_data(application_data, documents)
+        if not validation_result["valid"]:
+            logger.error(f"Input validation failed: {validation_result['errors']}")
+            # Could return early here, but continuing for compatibility
+        
+        if validation_result["warnings"]:
+            logger.warning(f"Input validation warnings: {validation_result['warnings']}")
         
         # Build processing prompt
+        customer = application_data.get("customer", {})
         prompt = f"""Please process this mortgage application:
 
 Customer: {customer.get('name', 'Unknown')}
@@ -103,18 +112,18 @@ Content: {content}"""
         
         prompt += """
 
-IMPORTANT: You MUST use the available tools to process these documents. Call each tool step by step:
+Please use your tools to:
+1. Classify each document type
+2. Check document quality
+3. Extract personal information
+4. Validate expiration dates
+5. Provide a summary of findings
 
-1. FIRST: Call classify_document_type(document_content="...", file_name="...") for each document
-2. THEN: Call check_document_quality(document_content="...") for each document  
-3. NEXT: Call extract_personal_information(document_content="...") for relevant documents
-4. ALSO: Call validate_document_expiration(document_content="...") for each document
-5. FINALLY: Call cross_validate_documents(documents=["..."]) to compare information
-
-Start now by calling classify_document_type for the first document with its content."""
+Start by using classify_document_type for the first document."""
         
         try:
-            logger.info(f"Processing mortgage application for {customer.get('name', 'Unknown')}")
+            customer_name = application_data.get("customer", {}).get('name', 'Unknown')
+            logger.info(f"Processing mortgage application for {customer_name}")
             
             response = self.agent.create_turn(
                 messages=[{"role": "user", "content": prompt}],
@@ -122,7 +131,9 @@ Start now by calling classify_document_type for the first document with its cont
                 stream=True,
             )
             
-            # Collect tool results properly
+            # Process the streaming response and extract tool calls
+            from llama_stack_client.lib.agents.event_logger import EventLogger
+            
             tool_results = []
             final_content = ""
             tools_called = 0
@@ -175,7 +186,7 @@ Start now by calling classify_document_type for the first document with its cont
                 "valid_documents": successful_tools,
                 "invalid_documents": max(0, len(documents) - successful_tools),
                 "missing_documents": [],
-                "document_validations": tool_results,  # Now properly formatted as list of dicts
+                "document_validations": tool_results,
                 "next_steps": next_steps,
                 "urla_1003_generated": urla_generated,
                 "agent_reasoning": final_content[:500] if final_content else "Agent processing completed successfully",
@@ -202,6 +213,89 @@ Start now by calling classify_document_type for the first document with its cont
                 "urla_1003_generated": False,
                 "agent_reasoning": f"Processing failed: {str(e)}",
                 "tools_used": 0
+            }
+    
+    def handle_chat_query(
+        self, 
+        user_message: str, 
+        conversation_history: List[Dict[str, Any]] = None,
+        session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Handle conversational queries about mortgage processing using the agent.
+        """
+        if not session_id:
+            session_id = self.create_session()
+        
+        try:
+            logger.info(f"Processing chat query: {user_message[:100]}...")
+            
+            # Create a new agent session for this chat query
+            # (Chat session IDs are different from agent session IDs)
+            agent_session_id = self.create_session()
+            
+            # Prepare the message for the agent
+            messages = [{"role": "user", "content": user_message}]
+            
+            # Call the agent with the user message (use streaming like document processing)
+            response = self.agent.create_turn(
+                messages=messages,
+                session_id=agent_session_id,
+                stream=True,
+            )
+            
+            # Extract response content from the agent
+            response_text = ""
+            all_content = []
+            
+            # Process the streaming response like we do for document processing
+            from llama_stack_client.lib.agents.event_logger import EventLogger
+            
+            logger.info(f"Processing agent response for: {user_message[:50]}...")
+            
+            for log in EventLogger().log(response):
+                try:
+                    log_str = str(log)
+                    
+                    # Log everything we're getting to debug
+                    if hasattr(log, 'content') and log.content:
+                        content = str(log.content).strip()
+                        all_content.append(content)
+                        logger.info(f"Agent content chunk: {content[:100]}...")
+                        
+                        # Skip tool execution logs but keep actual content
+                        if content and not content.startswith('tool_execution>') and not content.startswith('Tool:'):
+                            response_text += content + " "
+                        
+                except Exception as e:
+                    logger.warning(f"Error processing chat log: {e}")
+            
+            # Log what we collected
+            logger.info(f"All content chunks: {all_content}")
+            logger.info(f"Final response_text: {response_text}")
+            
+            # Clean up and provide fallback
+            response_text = response_text.strip()
+            if not response_text:
+                response_text = "I'm here to help with your mortgage needs. Could you please rephrase your question?"
+            
+            # Return structured response
+            return {
+                "response": response_text,
+                "type": "chat_response",
+                "session_id": session_id,
+                "tool_calls_made": getattr(response, 'tool_calls', []),
+                "processing_successful": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in chat query processing: {e}", exc_info=True)
+            return {
+                "response": "I apologize, but I encountered an error processing your request. Please try again or rephrase your question.",
+                "type": "error",
+                "session_id": session_id,
+                "error": str(e),
+                "processing_successful": False
             }
 
 

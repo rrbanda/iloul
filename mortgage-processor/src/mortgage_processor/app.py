@@ -1,14 +1,10 @@
-import os
-import json
 import uuid
 import logging
 from typing import List, Optional, Any, Dict
-from pathlib import Path
 from datetime import datetime
-import asyncio
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 import uvicorn
@@ -16,6 +12,7 @@ import uvicorn
 from .config import AppConfig
 from .models import LoanType, DocumentType
 from .agent import create_mortgage_agent, MortgageProcessingAgent
+from .chat_router import chat_router, set_chat_dependencies
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +42,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include chat router
+app.include_router(chat_router)
 
 # ---- Request/Response Models ----
 
@@ -105,25 +105,30 @@ class QuickProcessRequest(BaseModel):
 
 # ---- Helper Functions ----
 
-def _sse(payload: Dict[str, Any]) -> bytes:
-    """Format Server-Sent Events payload."""
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
-
 
 def _extract_text_from_file(file_content: bytes, file_name: str) -> str:
-    """Extract text content from uploaded file (demo implementation)."""
+    """
+    Extract text content from uploaded file.
+    
+    Note: This is a simplified implementation. In production, you would use:
+    - PDF extraction libraries (PyPDF2, pdfplumber, etc.)
+    - OCR services (Tesseract, AWS Textract, Google Vision API, etc.)
+    - Document processing services
+    """
     try:
         if file_name.lower().endswith('.txt'):
             return file_content.decode('utf-8')
         elif file_name.lower().endswith('.pdf'):
-            # Demo: simulate PDF text extraction
-            return f"CALIFORNIA DRIVER LICENSE\nName: John Michael Smith\nDOB: 03/15/1985\nAddress: 123 Main Street, Anytown, CA 90210\nLicense Number: D1234567\nExpiration Date: 12/31/2025\nClass: C\nRestrictions: NONE"
+            # In production: Use PDF extraction libraries
+            logger.info(f"PDF processing not implemented - returning placeholder for {file_name}")
+            return f"[PDF TEXT EXTRACTION PLACEHOLDER]\nFile: {file_name}\nSize: {len(file_content)} bytes\nNote: Implement PDF extraction with PyPDF2 or similar"
         else:
-            # For images, simulate OCR results
-            return f"[OCR EXTRACTED]\nDRIVER LICENSE\nSTATE OF CALIFORNIA\nJohn Michael Smith\nDOB: 03/15/1985\nEXP: 12/31/2025\nADDR: 123 Main St, Anytown CA 90210"
+            # In production: Use OCR services like Tesseract or cloud APIs
+            logger.info(f"OCR processing not implemented - returning placeholder for {file_name}")
+            return f"[OCR PLACEHOLDER]\nFile: {file_name}\nSize: {len(file_content)} bytes\nNote: Implement OCR with Tesseract, AWS Textract, or similar"
     except Exception as e:
         logger.warning(f"Error extracting text from {file_name}: {e}")
-        return f"[Content extraction failed for {file_name}]"
+        return f"[Content extraction failed for {file_name}: {str(e)}]"
 
 
 # ---- Application Lifecycle ----
@@ -141,6 +146,10 @@ async def startup():
         # Initialize mortgage processing agent
         _agent = create_mortgage_agent(_config)
         logger.info("Mortgage processing agent initialized successfully")
+        
+        # Set chat dependencies
+        set_chat_dependencies(_config, _agent)
+        logger.info("Chat endpoints configured successfully")
         
         logger.info(" Stateless Mortgage Processing API is ready!")
         
@@ -249,69 +258,6 @@ async def process_mortgage_documents(request: ProcessMortgageRequest):
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
 
-@app.post("/mortgage/process/stream")
-async def process_mortgage_documents_stream(request: ProcessMortgageRequest):
-    """
-    Process mortgage application with streaming updates (STATELESS).
-    """
-    if not all([_config, _agent]):
-        raise HTTPException(status_code=503, detail="Service not ready")
-    
-    async def generate_stream():
-        try:
-            application_id = request.application_id or f"APP_{uuid.uuid4().hex[:8].upper()}"
-            
-            # Prepare data (same as above)
-            application_data = {
-                "application_id": application_id,
-                "customer": {
-                    "name": request.customer.name,
-                    "age": request.customer.age,
-                    "loan_type": request.customer.loan_type.value,
-                    "authorize_credit_check": request.customer.authorize_credit_check
-                }
-            }
-            
-            documents = []
-            for doc in request.documents:
-                documents.append({
-                    "document_id": f"DOC_{uuid.uuid4().hex[:8].upper()}",
-                    "file_name": doc.file_name,
-                    "content_preview": doc.content[:200] + "..." if len(doc.content) > 200 else doc.content,
-                    "full_content": doc.content
-                })
-            
-            yield _sse({
-                "type": "started", 
-                "message": f"Starting processing for {request.customer.name}",
-                "application_id": application_id,
-                "documents_count": len(documents)
-            })
-            
-            # Stream processing with agent
-            for update in _agent.process_mortgage_application_stream(
-                application_data=application_data,
-                documents=documents
-            ):
-                yield _sse(update)
-            
-            yield _sse({
-                "type": "completed",
-                "message": "Processing completed successfully",
-                "application_id": application_id,
-                "timestamp": datetime.now().isoformat()
-            })
-            
-        except Exception as e:
-            logger.error(f"Error in streaming processing: {e}", exc_info=True)
-            yield _sse({"type": "error", "error": str(e)})
-    
-    return StreamingResponse(
-        generate_stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
-    )
-
 
 # ---- Convenience Endpoints ----
 
@@ -397,36 +343,6 @@ async def get_mortgage_config():
     }
 
 
-@app.get("/mortgage/demo/sample-request")
-async def get_sample_request():
-    """Get a sample request payload for testing."""
-    return {
-        "customer": {
-            "name": "John Michael Smith",
-            "age": 35,
-            "address": "123 Main Street, Anytown, CA 90210",
-            "ssn": "***-**-1234", 
-            "loan_type": "HomeLoan",
-            "authorize_credit_check": True
-        },
-        "documents": [
-            {
-                "file_name": "drivers_license.jpg",
-                "content": "CALIFORNIA DRIVER LICENSE\nName: John Michael Smith\nDOB: 03/15/1985\nAddress: 123 Main Street, Anytown, CA 90210\nLicense Number: D1234567\nExpiration Date: 12/31/2025",
-                "metadata": {"mime_type": "image/jpeg", "file_size": 245760}
-            },
-            {
-                "file_name": "bank_statement.pdf",
-                "content": "BANK STATEMENT\nAccount Holder: John M Smith\nAccount Number: ****1234\nStatement Period: 07/01/2024 - 07/31/2024\nBeginning Balance: $22,500.00\nEnding Balance: $25,000.00\nTotal Deposits: $8,500.00",
-                "metadata": {"mime_type": "application/pdf", "file_size": 512000}
-            },
-            {
-                "file_name": "pay_stub.pdf", 
-                "content": "PAY STUB\nEmployee: John Smith\nEmployer: Tech Solutions Inc\nPay Period: 07/01/2024 - 07/15/2024\nGross Pay: $5,500.00\nNet Pay: $4,200.00\nYear-to-Date Gross: $71,500.00",
-                "metadata": {"mime_type": "application/pdf", "file_size": 128000}
-            }
-        ]
-    }
 
 
 # ---- Main Application Entry Point ----

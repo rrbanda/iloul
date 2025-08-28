@@ -4,6 +4,11 @@ from datetime import datetime, date
 from enum import Enum
 
 
+class MortgageBaseModel(BaseModel):
+    """Base model with common configuration for all mortgage-related models"""
+    model_config = ConfigDict(protected_namespaces=())
+
+
 class DocumentType(str, Enum):
     DRIVER_LICENSE = "driver_license"
     BANK_STATEMENT = "bank_statement"

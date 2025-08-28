@@ -2,6 +2,7 @@ import os
 import yaml
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from typing import Optional, List, Dict, Any
+from .models import DocumentType, MortgageBaseModel  # Import shared types to avoid duplication
 
 
 class AppMeta(BaseModel):
@@ -10,21 +11,19 @@ class AppMeta(BaseModel):
     debug: bool = False
 
 
-class LlamaConfig(BaseModel):
+class LlamaStackConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     base_url: str
-    model_id: str
-    instructions: str
+    default_model: str
 
 
 class VectorDBConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
-    id: str
+    default_db_id: str
     provider: str
     embedding: str
     embedding_dimension: int
-    chunk_size: int
-    provider_vector_db_id: Optional[str] = None
+    default_chunk_size: int
 
 
 class DatabaseConfig(BaseModel):
@@ -36,15 +35,26 @@ class DatabaseConfig(BaseModel):
     password: str = "password"
 
 
-class DocumentRequirementConfig(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-    document_type: str
-    quantity: int
+class DocumentRequirementConfig(MortgageBaseModel):
+    document_type: str  # Keep as string for YAML compatibility, validate at runtime
+    quantity: int  # Alias for quantity_needed to maintain compatibility
     description: str
+    
+    @property
+    def quantity_needed(self) -> int:
+        """Alias for quantity to match models.DocumentRequirement"""
+        return self.quantity
+    
+    def get_document_type_enum(self) -> DocumentType:
+        """Convert string document_type to DocumentType enum"""
+        try:
+            return DocumentType(self.document_type)
+        except ValueError:
+            # Fallback for unknown document types
+            return DocumentType.DRIVER_LICENSE  # or handle as needed
 
 
-class ValidationRuleConfig(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
+class ValidationRuleConfig(MortgageBaseModel):
     max_days_until_expiry: Optional[int] = None
     max_age_months: Optional[int] = None
     max_age_years: Optional[int] = None
@@ -52,24 +62,64 @@ class ValidationRuleConfig(BaseModel):
     required_fields: Optional[List[str]] = None
 
 
-class PromptsConfig(BaseModel):
+class StatusThresholdsConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
-    system_prompt: str
-    processing_instructions: str
-    validation_prompt_template: str
-    document_template: str
+    success_condition: str
+    partial_condition: str
+    minimum_success_ratio: float
+    minimum_partial_ratio: float
+
+
+class BusinessLogicConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     completion_messages: Dict[str, str]
     next_steps: Dict[str, List[str]]
+    status_thresholds: StatusThresholdsConfig
+    session_id_format: str
+    application_id_format: str
 
 
-class MortgageConfig(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
+class MortgageConfig(MortgageBaseModel):
     max_document_size_mb: int = 10
     allowed_document_types: List[str] = [".pdf", ".jpg", ".jpeg", ".png"]
     validation_timeout_seconds: int = 30
     required_documents: Dict[str, List[DocumentRequirementConfig]]
     validation_rules: Dict[str, ValidationRuleConfig]
-    prompts: PromptsConfig
+    business_logic: BusinessLogicConfig
+
+
+class AgentInstructionsConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    chat_conversation: str
+    mortgage_processing: str
+
+
+class PromptsConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    validation_prompt_template: str
+    document_template: str
+
+
+class AgentSamplingParamsConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    strategy: Dict[str, Any]
+    max_tokens: int
+
+
+class AgentToolConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    tool_choice: str
+
+
+class AgentDefinitionConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    name: str
+    model: str
+    instructions: str
+    sampling_params: AgentSamplingParamsConfig
+    max_infer_iters: int
+    tools: List[str]
+    tool_config: AgentToolConfig
 
 
 class ResponseFormatConfig(BaseModel):
@@ -84,9 +134,12 @@ class ResponseFormatConfig(BaseModel):
 class AppConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     app: AppMeta
-    llama: LlamaConfig
+    llamastack: LlamaStackConfig
     vector_db: VectorDBConfig
     database: DatabaseConfig
+    agent_instructions: AgentInstructionsConfig
+    prompts: PromptsConfig
+    agents: List[AgentDefinitionConfig]
     mortgage: MortgageConfig
     response_format: ResponseFormatConfig
 
@@ -96,8 +149,8 @@ class AppConfig(BaseModel):
         cfg.app.session_name = os.getenv("SESSION_NAME", cfg.app.session_name)
         cfg.app.debug = os.getenv("DEBUG", "false").lower() == "true"
 
-        cfg.llama.base_url = os.getenv("LLAMA_BASE_URL", cfg.llama.base_url).rstrip("/")
-        cfg.llama.model_id = os.getenv("MODEL_ID", cfg.llama.model_id)
+        cfg.llamastack.base_url = os.getenv("LLAMA_BASE_URL", cfg.llamastack.base_url).rstrip("/")
+        cfg.llamastack.default_model = os.getenv("MODEL_ID", cfg.llamastack.default_model)
 
         cfg.database.host = os.getenv("DB_HOST", cfg.database.host)
         cfg.database.port = int(os.getenv("DB_PORT", str(cfg.database.port)))
@@ -150,8 +203,53 @@ class AppConfig(BaseModel):
     
     def format_processing_prompt(self, **kwargs) -> str:
         """Format the main processing prompt with provided variables."""
-        return self.mortgage.prompts.validation_prompt_template.format(**kwargs)
+        return self.prompts.validation_prompt_template.format(**kwargs)
     
     def format_document_info(self, index: int, **kwargs) -> str:
         """Format document information using the template."""
-        return self.mortgage.prompts.document_template.format(index=index, **kwargs)
+        return self.prompts.document_template.format(index=index, **kwargs)
+    
+    def get_mortgage_agent(self) -> Optional[AgentDefinitionConfig]:
+        """Get the mortgage processing agent configuration."""
+        for agent in self.agents:
+            if agent.name == "mortgage_processor":
+                return agent
+        return None
+    
+    def get_agent_instructions(self, agent_type: str = "mortgage_processing") -> str:
+        """Get agent instructions for the specified type."""
+        if agent_type == "mortgage_processing":
+            return self.agent_instructions.mortgage_processing
+        elif agent_type == "chat_conversation":
+            return self.agent_instructions.chat_conversation
+        return ""
+    
+    def get_sampling_params(self) -> Dict[str, Any]:
+        """Get sampling parameters for the mortgage agent."""
+        agent = self.get_mortgage_agent()
+        if agent:
+            return {
+                "strategy": agent.sampling_params.strategy,
+                "max_tokens": agent.sampling_params.max_tokens
+            }
+        return {"strategy": {"type": "greedy"}, "max_tokens": 2048}
+    
+    def get_session_id_format(self) -> str:
+        """Get session ID format template."""
+        return self.mortgage.business_logic.session_id_format
+    
+    def get_application_id_format(self) -> str:
+        """Get application ID format template."""
+        return self.mortgage.business_logic.application_id_format
+    
+    def get_status_thresholds(self) -> StatusThresholdsConfig:
+        """Get status determination thresholds."""
+        return self.mortgage.business_logic.status_thresholds
+    
+    def get_next_steps(self, step_type: str) -> List[str]:
+        """Get next steps for a specific step type."""
+        return self.mortgage.business_logic.next_steps.get(step_type, [])
+    
+    def get_completion_message(self, message_type: str) -> str:
+        """Get completion message for a specific type."""
+        return self.mortgage.business_logic.completion_messages.get(message_type, "Processing completed")
