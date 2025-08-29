@@ -6,203 +6,146 @@ import {
   Calculator, 
   CheckCircle, 
   Clock,
-  ArrowRight 
+  ArrowRight,
+  Home,
+  CreditCard,
+  TrendingUp 
 } from 'lucide-react'
 import { useChat } from '../context/ChatContext'
+import { WizardType } from '../types/wizard'
 
 function WelcomeScreen() {
-  const { startNewSession } = useChat()
+  const { startWizard, startNewSession } = useChat()
 
-  const features = [
+  const wizardOptions = [
     {
-      icon: <FileText className="w-6 h-6" />,
-      title: "Document Analysis",
-      description: "Upload and analyze mortgage documents instantly with AI-powered processing",
-      action: () => startNewSession("Document Analysis Session", "Document Analysis")
+      wizardType: 'first_time_buyer' as WizardType,
+      icon: <Home className="w-8 h-8" />,
+      title: "First-Time Home Buyer Guide",
+      description: "Get personalized guidance and preparation for your home buying journey",
+      features: ["Affordability analysis", "Loan option education", "Document preparation", "Process roadmap"],
+      badge: "Most Popular",
+      badgeColor: "bg-green-100 text-green-700"
     },
     {
-      icon: <Calculator className="w-6 h-6" />,
-      title: "Qualification Assessment", 
-      description: "Get insights on loan qualification based on your financial documents",
-      action: () => startNewSession("Qualification Assessment", "Qualification Assessment")
+      wizardType: 'pre_approval' as WizardType,
+      icon: <Calculator className="w-8 h-8" />,
+      title: "Pre-Approval Preparation",
+      description: "Prepare for pre-approval with financial analysis and document guidance",
+      features: ["Financial readiness check", "Credit score guidance", "Document preparation", "Lender recommendations"],
+      badge: "Fast Track",
+      badgeColor: "bg-blue-100 text-blue-700"
     },
     {
-      icon: <CheckCircle className="w-6 h-6" />,
-      title: "Compliance Checking",
-      description: "Ensure all requirements are met with automated compliance validation",
-      action: () => startNewSession("Compliance Checking", "Compliance Checking")
+      wizardType: 'mortgage_application' as WizardType,
+      icon: <CheckCircle className="w-8 h-8" />,
+      title: "Apply for Mortgage",
+      description: "Complete your mortgage application with step-by-step guidance",
+      features: ["Application assistance", "Document upload", "Progress tracking", "Lender matching"],
+      badge: "Apply Now",
+      badgeColor: "bg-orange-100 text-orange-700"
     },
     {
-      icon: <Clock className="w-6 h-6" />,
-      title: "Real-time Processing",
-      description: "Get instant feedback and recommendations as you submit information",
-      action: () => startNewSession("Real-time Processing Session", "Real-time Processing")
-    }
-  ]
-
-  const quickActions = [
-    {
-      title: "First-Time Home Buyer",
-      description: "New to buying a home? Get personalized guidance on loan options, down payments, and the application process.",
-      action: () => startNewSession("First-Time Buyer Consultation", "First-Time Buyer Consultation"),
-      badge: "Popular"
-    },
-    {
-      title: "Check Pre-Approval Eligibility", 
-      description: "Upload your financial documents and get an instant pre-approval estimate based on your income and credit.",
-      action: () => startNewSession("Pre-Approval Check", "Pre-Approval Check"),
-      badge: "Fast"
-    },
-    {
-      title: "Refinance Existing Loan",
-      description: "See if you qualify for better rates or cash-out refinancing on your current home.",
-      action: () => startNewSession("Refinance Consultation", "Refinance Consultation"),
-      badge: null
+      wizardType: 'refinance' as WizardType,
+      icon: <TrendingUp className="w-8 h-8" />,
+      title: "Refinance Analysis",
+      description: "Analyze if refinancing makes sense for your situation",
+      features: ["Rate comparison", "Break-even analysis", "Cash-out options", "Savings calculator"],
+      badge: null,
+      badgeColor: ""
     }
   ]
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-8">
-        {/* Hero Section */}
-        <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <MessageSquare className="w-8 h-8 text-blue-600" />
+      <div className="max-w-7xl mx-auto p-6 min-h-full flex flex-col justify-center">
+        {/* Hero Section - Larger but Efficient */}
+        <div className="text-center mb-10">
+          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <MessageSquare className="w-10 h-10 text-blue-600" />
           </div>
-          
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Apply for Your Home Loan
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            What brings you here today?
           </h1>
-          
-          <p className="text-lg text-gray-600 mb-4 max-w-2xl mx-auto">
-            Get pre-approved in minutes, not weeks. Our AI-powered system analyzes your documents instantly 
-            and guides you through every step of your mortgage application.
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+            Choose your path below. I'll guide you step-by-step with personalized help and AI analysis.
           </p>
-          
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 max-w-xl mx-auto">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <span className="font-medium text-blue-900">Ready to get started?</span>
-            </div>
-            <p className="text-blue-800 text-sm">
-              Most applications take 10-15 minutes. Have your financial documents ready for the best experience.
-            </p>
-          </div>
-          
-          <div className="flex items-center justify-center gap-6 text-sm text-gray-500 mb-8">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>Secure & Compliant</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <span>Instant Analysis</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-              <span>24/7 Available</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => startNewSession("General Mortgage Consultation", "General")}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium"
-          >
-            Start Chatting
-            <ArrowRight className="w-5 h-5" />
-          </button>
         </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 gap-6 mb-12">
-          {features.map((feature, index) => (
+        {/* Wizard Options - Responsive Grid for 4 Cards */}
+        <div className="grid xl:grid-cols-4 lg:grid-cols-2 md:grid-cols-2 grid-cols-1 gap-4 mb-8">
+          {wizardOptions.map((option, index) => (
             <button
               key={index}
-              onClick={feature.action}
-              className="p-6 text-left border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all group bg-white cursor-pointer"
+              onClick={() => startWizard(option.wizardType)}
+              className="relative p-4 text-left border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-xl transition-all group bg-white h-full"
             >
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 group-hover:bg-blue-100 transition-colors">
-                  {feature.icon}
+              {option.badge && (
+                <div className="absolute top-2 right-2">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${option.badgeColor}`}>
+                    {option.badge}
+                  </span>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">{feature.title}</h3>
-                  <p className="text-gray-600 text-sm">{feature.description}</p>
-                  <div className="flex items-center text-blue-600 text-sm font-medium mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Start Session
-                    <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+              )}
+              
+              <div className="flex flex-col h-full">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="flex-shrink-0 w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-100 transition-colors">
+                    {React.cloneElement(option.icon, { className: "w-6 h-6" })}
                   </div>
+                  <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors leading-tight pr-20">
+                    {option.title}
+                  </h3>
+                </div>
+                
+                <p className="text-gray-600 mb-4 leading-snug flex-grow text-sm">
+                  {option.description}
+                </p>
+                
+                <div className="space-y-1.5 mb-4">
+                  {option.features.map((feature, featureIndex) => (
+                    <div key={featureIndex} className="flex items-center gap-2 text-xs text-gray-600">
+                      <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
+                      <span className="leading-tight">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex items-center text-blue-600 font-semibold group-hover:translate-x-2 transition-transform mt-auto text-sm">
+                  Start This Journey
+                  <ArrowRight className="w-4 h-4 ml-2" />
                 </div>
               </div>
             </button>
           ))}
         </div>
 
-        {/* Quick Actions */}
+        {/* Alternative Options - Spacious */}
         <div className="border-t border-gray-200 pt-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
-            What would you like to do?
-          </h2>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            {quickActions.map((action, index) => (
-              <button
-                key={index}
-                onClick={action.action}
-                className="relative p-6 text-left border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all group bg-white"
-              >
-                {action.badge && (
-                  <div className="absolute top-3 right-3">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      action.badge === 'Popular' 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {action.badge}
-                    </span>
-                  </div>
-                )}
-                <h3 className="font-semibold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors pr-16">
-                  {action.title}
-                </h3>
-                <p className="text-sm text-gray-600 mb-4 leading-relaxed">{action.description}</p>
-                <div className="flex items-center text-blue-600 text-sm font-medium">
-                  Get Started
-                  <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </button>
-            ))}
+          <div className="text-center mb-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Prefer to explore first?
+            </h2>
+            <p className="text-gray-600">
+              Start with general questions or browse information before committing to a specific path.
+            </p>
           </div>
-        </div>
-
-        {/* Help Section */}
-        <div className="mt-12 p-6 bg-gray-50 rounded-lg">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <HelpCircle className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-medium text-gray-900 mb-2">Common Questions from Borrowers</h3>
-              <p className="text-gray-600 text-sm mb-3">
-                Get instant answers to questions like these:
-              </p>
-              <ul className="text-sm text-gray-600 space-y-2">
-                <li>• "How much house can I afford with my $75,000 salary?"</li>
-                <li>• "What's the minimum down payment for a first-time buyer?"</li>
-                <li>• "My credit score is 650 - what loan options do I have?"</li>
-                <li>• "Can I qualify with 1099 income from freelance work?"</li>
-                <li>• "What's the difference between conventional and FHA loans?"</li>
-              </ul>
-            </div>
+          
+          <div className="flex items-center justify-center">
+            <button
+              onClick={() => startNewSession("General Mortgage Consultation", "General")}
+              className="inline-flex items-center gap-3 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <MessageSquare className="w-5 h-5" />
+              Just Ask Questions
+            </button>
           </div>
         </div>
 
         {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-500">
           <p>
-            Powered by AI-driven mortgage processing • 
-            Secure document handling • 
-            Real-time analysis
+            Powered by AI • Secure & Compliant • Real-time Analysis
           </p>
         </div>
       </div>

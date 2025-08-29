@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react'
 import { ChatSession, ChatMessage, ChatSessionSummary } from '../types/chat'
+import { WizardState, WizardType, WIZARD_DEFINITIONS, WizardStepData } from '../types/wizard'
 import ChatAPI from '../services/api'
 import toast from 'react-hot-toast'
 
@@ -11,6 +12,7 @@ interface ChatState {
   isLoading: boolean
   isConnected: boolean
   error: string | null
+  wizardState: WizardState | null
 }
 
 // Action types
@@ -24,6 +26,12 @@ type ChatAction =
   | { type: 'ADD_MESSAGE'; payload: ChatMessage }
   | { type: 'UPDATE_MESSAGE'; payload: { messageId: string; updates: Partial<ChatMessage> } }
   | { type: 'DELETE_SESSION'; payload: string }
+  | { type: 'START_WIZARD'; payload: { wizardType: WizardType; sessionName?: string } }
+  | { type: 'UPDATE_WIZARD_STEP'; payload: { stepId: string; data?: WizardStepData } }
+  | { type: 'COMPLETE_WIZARD_STEP'; payload: { stepId: string } }
+  | { type: 'GO_TO_WIZARD_STEP'; payload: { stepId: string } }
+  | { type: 'SET_WIZARD_STATE'; payload: WizardState | null }
+  | { type: 'CLEAR_WIZARD'; payload: null }
 
 // Initial state
 const initialState: ChatState = {
@@ -33,6 +41,7 @@ const initialState: ChatState = {
   isLoading: false,
   isConnected: false,
   error: null,
+  wizardState: null,
 }
 
 // Reducer
@@ -85,6 +94,107 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
           : state.currentSession
       }
     
+    case 'START_WIZARD':
+      const wizardDef = WIZARD_DEFINITIONS[action.payload.wizardType as string]
+      if (!wizardDef) return state
+      
+      return {
+        ...state,
+        wizardState: {
+          wizardType: action.payload.wizardType,
+          currentStepId: wizardDef.steps[0].id,
+          steps: wizardDef.steps.map((step, index) => ({
+            ...step,
+            isCompleted: false,
+            isActive: index === 0
+          })),
+          collectedData: {},
+          completionPercentage: 0,
+          isCompleted: false
+        }
+      }
+    
+    case 'UPDATE_WIZARD_STEP':
+      if (!state.wizardState) return state
+      
+      return {
+        ...state,
+        wizardState: {
+          ...state.wizardState,
+          collectedData: {
+            ...state.wizardState.collectedData,
+            [action.payload.stepId]: {
+              ...state.wizardState.collectedData[action.payload.stepId],
+              ...action.payload.data
+            }
+          }
+        }
+      }
+    
+    case 'COMPLETE_WIZARD_STEP':
+      if (!state.wizardState) return state
+      
+      const stepIndex = state.wizardState.steps.findIndex(s => s.id === action.payload.stepId)
+      const nextStepIndex = stepIndex + 1
+      const hasNextStep = nextStepIndex < state.wizardState.steps.length
+      
+      return {
+        ...state,
+        wizardState: {
+          ...state.wizardState,
+          currentStepId: hasNextStep ? state.wizardState.steps[nextStepIndex].id : action.payload.stepId,
+          steps: state.wizardState.steps.map((step, index) => ({
+            ...step,
+            isCompleted: index <= stepIndex,
+            isActive: index === nextStepIndex || (!hasNextStep && index === stepIndex)
+          })),
+          completionPercentage: Math.round(((stepIndex + 1) / state.wizardState.steps.length) * 100),
+          isCompleted: !hasNextStep
+        }
+      }
+    
+    case 'GO_TO_WIZARD_STEP':
+      if (!state.wizardState) return state
+      
+      const targetStepIndex = state.wizardState.steps.findIndex(s => s.id === action.payload.stepId)
+      if (targetStepIndex === -1) return state
+      
+      const targetStep = state.wizardState.steps[targetStepIndex]
+      
+      // Create a system message indicating step change
+      const stepChangeMessage: ChatMessage = {
+        message_id: `step_change_${Date.now()}`,
+        role: 'assistant' as const,
+        content: `You've navigated to: **${targetStep.title}**\n\n${targetStep.description}\n\nI'm here to help you with this step. Feel free to ask questions or use the quick prompts above!`,
+        timestamp: new Date().toISOString(),
+        session_id: state.currentSession?.session_id || ''
+      }
+      
+      return {
+        ...state,
+        messages: [stepChangeMessage], // Clear old messages and add step info
+        wizardState: {
+          ...state.wizardState,
+          currentStepId: action.payload.stepId,
+          steps: state.wizardState.steps.map((step, index) => ({
+            ...step,
+            isActive: index === targetStepIndex
+          }))
+        }
+      }
+    
+    case 'SET_WIZARD_STATE':
+      return {
+        ...state,
+        wizardState: action.payload
+      }
+    
+    case 'CLEAR_WIZARD':
+      return {
+        ...state,
+        wizardState: null
+      }
+    
     default:
       return state
   }
@@ -102,6 +212,12 @@ interface ChatContextType {
   clearMessages: () => Promise<void>
   goHome: () => void
   clearError: () => void
+  // Wizard functions
+  startWizard: (wizardType: WizardType, sessionName?: string) => Promise<void>
+  updateWizardStep: (stepId: string, data?: WizardStepData) => void
+  completeWizardStep: (stepId: string) => void
+  goToWizardStep: (stepId: string) => void
+  clearWizard: () => void
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -211,9 +327,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage })
 
       // Send to API
-      console.log('Sending message to agent:', message)
       const response = await ChatAPI.sendMessage(sessionId, message)
-      console.log('Received response from agent:', response)
 
       // Add assistant response
       const assistantMessage: ChatMessage = {
@@ -222,7 +336,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         role: 'assistant',
         content: response.response,
         message_type: response.message_type as any,
-        timestamp: response.timestamp,
+        timestamp: typeof response.timestamp === 'string' ? response.timestamp : response.timestamp.toString(),
         processing_result: response.processing_result,
         confidence_score: response.confidence_score,
       }
@@ -332,6 +446,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_ERROR', payload: null })
   }
 
+  // Wizard functions
+  const startWizard = async (wizardType: WizardType, sessionName?: string) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true })
+      dispatch({ type: 'SET_ERROR', payload: null })
+
+      // Start wizard state first
+      dispatch({ type: 'START_WIZARD', payload: { wizardType, sessionName } })
+
+      // Create session with wizard context
+      const wizardDef = WIZARD_DEFINITIONS[wizardType as string]
+      const session = await ChatAPI.startSession(
+        undefined, 
+        sessionName || wizardDef.title,
+        wizardType as string
+      )
+      
+      dispatch({ type: 'SET_CURRENT_SESSION', payload: session })
+      
+      // Reload sessions to include the new one
+      await loadSessions()
+      
+      toast.success(`Started ${wizardDef.title}`)
+    } catch (error) {
+      console.error('Failed to start wizard:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start wizard'
+      dispatch({ type: 'SET_ERROR', payload: errorMessage })
+      toast.error(errorMessage)
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }
+
+  const updateWizardStep = (stepId: string, data?: WizardStepData) => {
+    dispatch({ type: 'UPDATE_WIZARD_STEP', payload: { stepId, data } })
+  }
+
+  const completeWizardStep = (stepId: string) => {
+    dispatch({ type: 'COMPLETE_WIZARD_STEP', payload: { stepId } })
+  }
+
+  const goToWizardStep = (stepId: string) => {
+    dispatch({ type: 'GO_TO_WIZARD_STEP', payload: { stepId } })
+  }
+
+  const clearWizard = () => {
+    dispatch({ type: 'CLEAR_WIZARD', payload: null })
+  }
+
   const contextValue: ChatContextType = {
     state,
     startNewSession,
@@ -343,6 +506,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     clearMessages,
     goHome,
     clearError,
+    startWizard,
+    updateWizardStep,
+    completeWizardStep,
+    goToWizardStep,
+    clearWizard,
   }
 
   return (

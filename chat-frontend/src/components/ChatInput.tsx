@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent } from 'react'
+import React, { useState, useRef, KeyboardEvent, forwardRef, useImperativeHandle } from 'react'
 import { Send, Paperclip, X, FileText, Image } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { useChat } from '../context/ChatContext'
@@ -6,14 +6,32 @@ import toast from 'react-hot-toast'
 
 interface ChatInputProps {
   disabled?: boolean
+  placeholder?: string
 }
 
-function ChatInput({ disabled = false }: ChatInputProps) {
+export interface ChatInputRef {
+  preFillMessage: (text: string) => void
+}
+
+const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ disabled = false, placeholder }, ref) => {
   const [message, setMessage] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const { sendMessage, uploadFiles } = useChat()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Expose pre-fill function to parent
+  useImperativeHandle(ref, () => ({
+    preFillMessage: (text: string) => {
+      setMessage(text)
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        // Auto-resize
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`
+      }
+    }
+  }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -154,9 +172,9 @@ function ChatInput({ disabled = false }: ChatInputProps) {
               onChange={handleTextareaChange}
               onKeyPress={handleKeyPress}
               placeholder={
-                attachedFiles.length > 0
+                placeholder || (attachedFiles.length > 0
                   ? 'Add a message about your documents (optional)...'
-                  : 'Ask me about mortgage requirements, upload documents, or start a new application...'
+                  : 'Type your information here, or click a suggestion above...')
               }
               disabled={disabled}
               className="flex-1 resize-none border-0 bg-transparent focus:ring-0 focus:outline-none placeholder-gray-500 min-h-[24px] max-h-[120px] disabled:opacity-50"
@@ -201,6 +219,8 @@ function ChatInput({ disabled = false }: ChatInputProps) {
       </div>
     </div>
   )
-}
+})
+
+ChatInput.displayName = 'ChatInput'
 
 export default ChatInput
