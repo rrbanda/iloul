@@ -1,6 +1,7 @@
-import React from 'react'
+
 import { Bot, User } from 'lucide-react'
 import { ChatMessage } from '../types/chat'
+import DynamicPromptsRenderer from './DynamicPromptsRenderer'
 
 interface MessageListProps {
   messages: ChatMessage[]
@@ -22,9 +23,9 @@ function MessageList({ messages, isLoading }: MessageListProps) {
 
   return (
     <div className="p-4 space-y-4">
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <div
-          key={message.message_id}
+          key={message.message_id || `message-${index}`}
           className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
         >
           {message.role === 'assistant' && (
@@ -39,7 +40,12 @@ function MessageList({ messages, isLoading }: MessageListProps) {
                 ? 'bg-blue-600 text-white'
                 : 'bg-white border border-gray-200 text-gray-900'
             }`}>
-              <div className="whitespace-pre-wrap">{message.content}</div>
+              {/* Check for dynamic prompts in assistant messages */}
+              {message.role === 'assistant' && message.content.startsWith('DYNAMIC_PROMPTS:') ? (
+                <DynamicPromptsRenderer content={message.content} />
+              ) : (
+                <div className="whitespace-pre-wrap">{message.content}</div>
+              )}
             </div>
             
             <div className={`text-xs text-gray-500 mt-1 ${
@@ -70,7 +76,7 @@ function MessageList({ messages, isLoading }: MessageListProps) {
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
-              <span className="text-blue-700 font-medium">AI is thinking...</span>
+              <span className="text-blue-700 font-medium">Thinking...</span>
             </div>
           </div>
         </div>

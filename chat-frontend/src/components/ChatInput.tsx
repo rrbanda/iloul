@@ -17,7 +17,7 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ disabled = false, 
   const [message, setMessage] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const { sendMessage, uploadFiles } = useChat()
+  const { sendMessage, sendMortgageMessage, uploadFiles, state } = useChat()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
   // Expose pre-fill function to parent
@@ -43,7 +43,12 @@ const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ disabled = false, 
       if (attachedFiles.length > 0) {
         await uploadFiles(message || 'Please analyze these documents:', attachedFiles)
       } else {
-        await sendMessage(message)
+        // Route to appropriate API based on current mode
+        if (state.mortgageApplication.isActive) {
+          await sendMortgageMessage(message)
+        } else {
+          await sendMessage(message)
+        }
       }
 
       // Clear input

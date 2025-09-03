@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 import { ChatSession, ChatMessage, ChatSessionSummary } from '../types/chat'
 import { WizardState, WizardType, WIZARD_DEFINITIONS, WizardStepData } from '../types/wizard'
 import ChatAPI from '../services/api'
+import { AgenticApplicationAPI, ApplicationSubmissionResponse } from '../services/applicationApi'
 import toast from 'react-hot-toast'
 
 // State interface
@@ -13,6 +14,14 @@ interface ChatState {
   isConnected: boolean
   error: string | null
   wizardState: WizardState | null
+  mortgageApplication: {
+    isActive: boolean
+    sessionId?: string
+    completionPercentage?: number
+    phase?: string
+    isComplete?: boolean
+    collectedData?: Record<string, any>
+  }
 }
 
 // Action types
@@ -32,6 +41,8 @@ type ChatAction =
   | { type: 'GO_TO_WIZARD_STEP'; payload: { stepId: string } }
   | { type: 'SET_WIZARD_STATE'; payload: WizardState | null }
   | { type: 'CLEAR_WIZARD'; payload: null }
+  | { type: 'SET_MORTGAGE_APPLICATION'; payload: { isActive: boolean; sessionId?: string; completionPercentage?: number; phase?: string; isComplete?: boolean; collectedData?: Record<string, any> } }
+  | { type: 'UPDATE_MORTGAGE_APPLICATION'; payload: Partial<{ sessionId: string; completionPercentage: number; phase: string; isComplete: boolean; collectedData: Record<string, any> }> }
 
 // Initial state
 const initialState: ChatState = {
@@ -42,6 +53,14 @@ const initialState: ChatState = {
   isConnected: false,
   error: null,
   wizardState: null,
+  mortgageApplication: {
+    isActive: false,
+    sessionId: undefined,
+    completionPercentage: 0,
+    phase: undefined,
+    isComplete: false,
+    collectedData: {}
+  }
 }
 
 // Reducer
@@ -194,6 +213,21 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         wizardState: null
       }
+
+    case 'SET_MORTGAGE_APPLICATION':
+      return {
+        ...state,
+        mortgageApplication: action.payload
+      }
+
+    case 'UPDATE_MORTGAGE_APPLICATION':
+      return {
+        ...state,
+        mortgageApplication: {
+          ...state.mortgageApplication,
+          ...action.payload
+        }
+      }
     
     default:
       return state
@@ -218,6 +252,13 @@ interface ChatContextType {
   completeWizardStep: (stepId: string) => void
   goToWizardStep: (stepId: string) => void
   clearWizard: () => void
+  // Mortgage application functions
+  startMortgageApplication: () => Promise<void>
+  sendMortgageMessage: (message: string) => Promise<void>
+  submitMortgageApplication: (collectedData: Record<string, any>) => Promise<ApplicationSubmissionResponse | null>
+  clearMortgageApplication: () => void
+  setMortgageApplication: (data: { isActive: boolean; sessionId?: string; completionPercentage?: number; phase?: string; isComplete?: boolean; collectedData?: Record<string, any> }) => void
+  updateMortgageApplication: (data: Partial<{ sessionId: string; completionPercentage: number; phase: string; isComplete: boolean; collectedData: Record<string, any> }>) => void
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -440,6 +481,160 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const goHome = () => {
     dispatch({ type: 'SET_CURRENT_SESSION', payload: null })
     dispatch({ type: 'SET_MESSAGES', payload: [] })
+    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: { isActive: false } })
+  }
+
+  const setMortgageApplication = (data: { isActive: boolean; sessionId?: string; completionPercentage?: number; phase?: string; isComplete?: boolean; collectedData?: Record<string, any> }) => {
+    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: data })
+  }
+
+  const updateMortgageApplication = (data: Partial<{ sessionId: string; completionPercentage: number; phase: string; isComplete: boolean; collectedData: Record<string, any> }>) => {
+    dispatch({ type: 'UPDATE_MORTGAGE_APPLICATION', payload: data })
+  }
+
+  const startMortgageApplication = async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true })
+      dispatch({ type: 'SET_ERROR', payload: null })
+      
+      const response = await AgenticApplicationAPI.startApplication()
+      
+      // Set up mortgage application state
+      dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: {
+        isActive: true,
+        sessionId: response.session_id,
+        completionPercentage: 0,
+        phase: 'initial'
+      }})
+
+      // Add the initial message
+      const initialMessage: ChatMessage = {
+        message_id: Date.now().toString(),
+        session_id: response.session_id,
+        role: 'assistant',
+        content: response.message,
+        message_type: 'text',
+        timestamp: new Date().toISOString()
+      }
+      
+      dispatch({ type: 'SET_MESSAGES', payload: [initialMessage] })
+      
+    } catch (error) {
+      console.error('Failed to start mortgage application:', error)
+      const message = error instanceof Error ? error.message : 'Failed to start mortgage application'
+      dispatch({ type: 'SET_ERROR', payload: message })
+      toast.error(message)
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }
+
+  const sendMortgageMessage = async (message: string) => {
+    const sessionId = state.mortgageApplication.sessionId
+    if (!sessionId) {
+      toast.error('No active mortgage application session')
+      return
+    }
+
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true })
+      dispatch({ type: 'SET_ERROR', payload: null })
+
+      // Add user message immediately
+      const userMessage: ChatMessage = {
+        message_id: Date.now().toString(),
+        session_id: sessionId,
+        role: 'user',
+        content: message,
+        message_type: 'text',
+        timestamp: new Date().toISOString()
+      }
+      dispatch({ type: 'ADD_MESSAGE', payload: userMessage })
+
+      // Send to LangGraph agent
+      const response = await AgenticApplicationAPI.chatWithAgents(sessionId, message)
+
+      // Add assistant response
+      const assistantMessage: ChatMessage = {
+        message_id: (Date.now() + 1).toString(),
+        session_id: sessionId,
+        role: 'assistant',
+        content: response.response,
+        message_type: 'text',
+        timestamp: response.timestamp
+      }
+      dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage })
+
+      // Extract collected data if available
+      const collectedData = response.application_data ? {
+        full_name: response.application_data.personal_info?.full_name,
+        phone: response.application_data.personal_info?.phone,
+        email: response.application_data.personal_info?.email,
+        annual_income: response.application_data.employment_info?.annual_income,
+        employer: response.application_data.employment_info?.employer,
+        employment_type: response.application_data.employment_info?.employment_type,
+        purchase_price: response.application_data.property_info?.purchase_price,
+        property_type: response.application_data.property_info?.property_type,
+        property_location: response.application_data.property_info?.property_location,
+        down_payment: response.application_data.financial_info?.down_payment,
+        credit_score: response.application_data.financial_info?.credit_score
+      } : {}
+
+      // Update mortgage application state
+      dispatch({ type: 'UPDATE_MORTGAGE_APPLICATION', payload: {
+        completionPercentage: response.completion_percentage,
+        phase: response.phase,
+        isComplete: response.is_complete,
+        collectedData: collectedData
+      }})
+
+    } catch (error) {
+      console.error('Failed to send mortgage message:', error)
+      const message = error instanceof Error ? error.message : 'Failed to send message'
+      dispatch({ type: 'SET_ERROR', payload: message })
+      toast.error(message)
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }
+
+  const submitMortgageApplication = async (collectedData: Record<string, any>) => {
+    const sessionId = state.mortgageApplication.sessionId
+    if (!sessionId) {
+      toast.error('No active mortgage application session')
+      return null
+    }
+
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true })
+      dispatch({ type: 'SET_ERROR', payload: null })
+
+      // Submit the application
+      const response = await AgenticApplicationAPI.submitApplication(sessionId, collectedData)
+
+      // Success toast
+      if (response.status === 'submitted') {
+        toast.success(`Application submitted successfully! ID: ${response.application_id}`)
+      } else {
+        toast.warning('Application saved with validation errors')
+      }
+
+      return response
+
+    } catch (error) {
+      console.error('Failed to submit mortgage application:', error)
+      const message = error instanceof Error ? error.message : 'Failed to submit application'
+      dispatch({ type: 'SET_ERROR', payload: message })
+      toast.error(message)
+      return null
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }
+
+  const clearMortgageApplication = () => {
+    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: { isActive: false } })
+    dispatch({ type: 'SET_MESSAGES', payload: [] })
   }
 
   const clearError = () => {
@@ -511,6 +706,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     completeWizardStep,
     goToWizardStep,
     clearWizard,
+    startMortgageApplication,
+    sendMortgageMessage,
+    submitMortgageApplication,
+    clearMortgageApplication,
+    setMortgageApplication,
+    updateMortgageApplication,
   }
 
   return (

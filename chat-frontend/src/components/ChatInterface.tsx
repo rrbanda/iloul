@@ -1,5 +1,5 @@
-import { useRef, useEffect } from 'react'
-import { AlertCircle, HelpCircle, Home } from 'lucide-react'
+import { useRef, useEffect, useState } from 'react'
+import { AlertCircle, HelpCircle, Home, ArrowLeft, CheckCircle } from 'lucide-react'
 import { useChat } from '../context/ChatContext'
 import MessageList from './MessageList'
 import ChatInput, { ChatInputRef } from './ChatInput'
@@ -8,13 +8,36 @@ import QuickPrompts from './QuickPrompts'
 import WizardStep from './WizardStep'
 
 function ChatInterface() {
-  const { state, goHome, clearWizard, completeWizardStep, goToWizardStep } = useChat()
+  const { 
+    state, 
+    goHome, 
+    clearWizard, 
+    completeWizardStep, 
+    goToWizardStep,
+    startMortgageApplication,
+    submitMortgageApplication,
+    clearMortgageApplication,
+    updateMortgageApplication
+  } = useChat()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<ChatInputRef>(null)
+  const [hasStartedMortgage, setHasStartedMortgage] = useState(false)
 
   // Get current wizard step
   const currentStep = state.wizardState?.steps.find(s => s.isActive)
   const currentStepIndex = state.wizardState?.steps.findIndex(s => s.isActive) ?? -1
+
+  // Check if we're in mortgage application mode (LangGraph)
+  const isMortgageApplication = state.mortgageApplication.isActive || 
+                                state.wizardState?.wizardType === 'mortgage_application'
+
+  // Auto-start mortgage application if needed
+  useEffect(() => {
+    if (isMortgageApplication && !hasStartedMortgage && !state.mortgageApplication.isActive) {
+      startMortgageApplication()
+      setHasStartedMortgage(true)
+    }
+  }, [isMortgageApplication, hasStartedMortgage, state.mortgageApplication.isActive, startMortgageApplication])
 
   // Wizard navigation
   const handleWizardNext = () => {
@@ -41,6 +64,16 @@ function ChatInterface() {
       goHome() // Take user back to home/welcome screen
     }
   }
+
+  // Mortgage application handlers
+  const handleMortgageBack = () => {
+    clearMortgageApplication()
+    setHasStartedMortgage(false)
+    goHome()
+  }
+
+  // Check if application is complete and ready for summary
+  const showMortgageApplicationSummary = state.mortgageApplication.isComplete
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -79,14 +112,131 @@ function ChatInterface() {
     )
   }
 
+  // Application Summary Component (moved from MortgageApplicationWizard)
+  const ApplicationSummary = ({ collectedData, onSubmit, onEdit }: {
+    collectedData: Record<string, any>
+    onSubmit: () => void
+    onEdit: () => void
+  }) => {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <h2 className="text-lg font-semibold text-green-800">
+                Application Data Collection Complete!
+              </h2>
+            </div>
+            <p className="text-green-700 text-sm">
+              Review your information below and submit your mortgage application.
+            </p>
+          </div>
+
+          {/* Collected Data Display */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Your Application Information
+            </h3>
+            
+            {Object.keys(collectedData).length > 0 ? (
+              <div className="space-y-4">
+                {Object.entries(collectedData).map(([key, value]) => (
+                  <div key={key} className="flex justify-between py-2 border-b border-gray-100 last:border-b-0">
+                    <span className="font-medium text-gray-700 capitalize">
+                      {key.replace(/_/g, ' ')}:
+                    </span>
+                    <span className="text-gray-900">
+                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">No data collected yet.</p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={onEdit}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Edit Information
+            </button>
+            <button
+              onClick={onSubmit}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Submit Application
+            </button>
+          </div>
+
+          {/* Next Steps Info */}
+          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-medium text-blue-800 mb-2">Next Steps:</h4>
+            <ul className="text-blue-700 text-sm space-y-1">
+              <li>• Submit this application for processing</li>
+              <li>• Upload required documents</li>
+              <li>• Wait for initial review and approval</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Compact Header with Integrated Progress */}
       <div className="flex-shrink-0 border-b border-gray-200 bg-white">
         {state.currentSession ? (
           <div className="p-2">
-            {/* Wizard Mode - Ultra Compact Layout */}
-            {state.wizardState ? (
+            {/* Mortgage Application Mode - Special Header */}
+            {isMortgageApplication ? (
+              <div className="bg-white border-b border-gray-200 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleMortgageBack}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Back to home"
+                    >
+                      <ArrowLeft size={20} className="text-gray-600" />
+                    </button>
+                    <div>
+                      <h1 className="text-xl font-semibold text-gray-900">
+                        Mortgage Application
+                      </h1>
+                      <p className="text-sm text-gray-600">
+                        {state.mortgageApplication.phase === 'data_collection' 
+                          ? 'Collecting your information...' 
+                          : 'Complete'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Progress indicator */}
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm text-gray-600">
+                      {Math.round((state.mortgageApplication.completionPercentage || 0) * 100)}% Complete
+                    </div>
+                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 transition-all duration-500"
+                        style={{ 
+                          width: `${(state.mortgageApplication.completionPercentage || 0) * 100}%` 
+                        }}
+                      />
+                    </div>
+                    {state.mortgageApplication.isComplete && (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : state.wizardState ? (
               <div className="space-y-1.5">
                 {/* Top Row: Exit + Title + Progress */}
                 <div className="flex items-center justify-between">
@@ -255,6 +405,69 @@ function ChatInterface() {
               />
             </div>
           </>
+        ) : isMortgageApplication ? (
+          // Mortgage Application (LangGraph) - Inline handling
+          <div className="flex-1 flex flex-col min-h-0">
+            {!showMortgageApplicationSummary ? (
+              <>
+                {/* Chat Messages */}
+                <div className="flex-1 overflow-y-auto bg-gray-50 min-h-0">
+                  <div className="max-w-4xl mx-auto">
+                    <MessageList 
+                      messages={state.messages}
+                      isLoading={state.isLoading}
+                    />
+                  </div>
+                </div>
+
+                {/* Chat Input */}
+                <div className="flex-shrink-0 border-t border-gray-200 bg-white p-4">
+                  <div className="max-w-4xl mx-auto">
+                    <ChatInput 
+                      disabled={state.isLoading || state.mortgageApplication.isComplete}
+                      placeholder={
+                        state.mortgageApplication.isComplete 
+                          ? "Application data collection complete!"
+                          : "Type your answer..."
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Application Summary & Submission */
+              <ApplicationSummary 
+                collectedData={state.mortgageApplication.collectedData || {}}
+                onSubmit={async () => {
+                  // Extract collected data from the application state
+                  const collectedData = {
+                    // Get data from messages or state
+                    ...state.mortgageApplication.collectedData
+                  }
+                  
+                  // Submit the application
+                  const result = await submitMortgageApplication(collectedData)
+                  
+                  if (result) {
+                    console.log('Application submitted successfully:', result.application_id)
+                    // Optionally redirect to success page or show next steps
+                  }
+                }}
+                onEdit={() => {
+                  // Allow editing by clearing completion status
+                  // Update the context to allow continued conversation
+                  updateMortgageApplication({ isComplete: false, completionPercentage: 90 })
+                }}
+              />
+            )}
+
+            {/* Status Messages */}
+            {state.error && (
+              <div className="bg-red-50 border border-red-200 p-3 m-4 rounded-lg">
+                <p className="text-red-800 text-sm">{state.error}</p>
+              </div>
+            )}
+          </div>
         ) : (
           // Welcome Screen when no session is active
           <WelcomeScreen />
