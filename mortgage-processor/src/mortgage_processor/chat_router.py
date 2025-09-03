@@ -108,8 +108,9 @@ async def get_chat_session(session_id: str):
     session_manager = get_chat_session_manager()
     session = session_manager.get_session(session_id)
     
+    # Auto-create session if not found (like LangGraph pattern)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        session = session_manager.create_session()
     
     return session
 
@@ -125,8 +126,9 @@ async def send_chat_message(session_id: str, request: ChatMessageRequest):
     # Get or create session
     if request.session_id:
         session = session_manager.get_session(request.session_id)
+        # Auto-create session if not found
         if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+            session = session_manager.create_session()
     else:
         session = session_manager.get_or_create_session(session_id=session_id)
     
@@ -220,8 +222,9 @@ async def upload_and_process_documents(
     session_manager = get_chat_session_manager()
     session = session_manager.get_session(session_id)
     
+    # Auto-create session if not found
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        session = session_manager.create_session()
     
     try:
         # Add user message with file indication
@@ -319,8 +322,9 @@ async def get_conversation_history(session_id: str, limit: Optional[int] = None)
     session_manager = get_chat_session_manager()
     session = session_manager.get_session(session_id)
     
+    # Auto-create session if not found
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        session = session_manager.create_session()
     
     history = session_manager.get_conversation_history(session_id, limit)
     return {"session_id": session_id, "messages": history}
@@ -332,8 +336,9 @@ async def delete_chat_session(session_id: str):
     session_manager = get_chat_session_manager()
     session = session_manager.get_session(session_id)
     
+    # Auto-create session if not found (for consistent behavior)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        session = session_manager.create_session()
     
     # In a real implementation, you'd delete from database
     # For now, just mark as completed
@@ -348,8 +353,9 @@ async def clear_chat_messages(session_id: str):
     session_manager = get_chat_session_manager()
     session = session_manager.get_session(session_id)
     
+    # Auto-create session if not found
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        session = session_manager.create_session()
     
     # Clear all messages from this session
     success = session_manager.clear_session_messages(session_id)

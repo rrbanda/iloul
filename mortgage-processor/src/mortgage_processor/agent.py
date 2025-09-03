@@ -73,6 +73,27 @@ class MortgageProcessingAgent:
         session_id = self.config.get_session_id_format().format(uuid.uuid4().hex)
         return self.agent.create_session(session_id)
     
+    async def query_knowledge_base(self, query: str, customer_id: str = None, max_chunks: int = 5):
+        """Query the RAG knowledge base for customer information"""
+        try:
+            from .rag_endpoints import QueryMortgageKnowledgeRequest, query_mortgage_knowledge
+            
+            request = QueryMortgageKnowledgeRequest(
+                query=query,
+                customer_id=customer_id,
+                max_chunks=max_chunks
+            )
+            
+            return await query_mortgage_knowledge(request)
+            
+        except Exception as e:
+            logger.error(f"Failed to query knowledge base: {e}")
+            return {
+                "answer": "Unable to retrieve information from knowledge base.",
+                "sources": [],
+                "confidence": 0.0
+            }
+    
     def process_mortgage_application(
         self, 
         application_data: Dict[str, Any], 

@@ -28,235 +28,155 @@ class IngestMortgageDocsRequest(BaseModel):
     documents: List[MortgageDocument]
     chunk_size_in_tokens: Optional[int] = 512
 
-class QueryMortgageDocsRequest(BaseModel):
-    customer_id: Optional[str] = None
-    application_id: Optional[str] = None
+class IngestMortgageDocsResponse(BaseModel):
+    status: str
+    message: str
+    processed_count: int
+    document_ids: List[str]
+
+class QueryMortgageKnowledgeRequest(BaseModel):
     query: str
-    document_types: Optional[List[str]] = None  # Filter by doc type
+    customer_id: Optional[str] = None
+    document_types: Optional[List[str]] = None
+    max_chunks: Optional[int] = 5
 
-class RAGProcessingRequest(BaseModel):
-    customer_id: str
-    query: str  # "Analyze all documents for John Smith"
-    use_tools: bool = True  # Whether to also use direct tools
+class QueryMortgageKnowledgeResponse(BaseModel):
+    answer: str
+    sources: List[Dict[str, Any]]
+    confidence: float
 
+# We'll get these from the main app
+_config: Optional[AppConfig] = None
+_client = None
 
-def _ensure_mortgage_vector_db(client, config: AppConfig):
-    """Ensure mortgage-specific vector DB exists."""
+def set_rag_dependencies(config: AppConfig, client):
+    """Set dependencies from main app"""
+    global _config, _client
+    _config = config
+    _client = client
+
+@router.post("/ingest", response_model=IngestMortgageDocsResponse)
+async def ingest_mortgage_documents(request: IngestMortgageDocsRequest):
+    """
+    Ingest mortgage documents into vector database for semantic search.
+    """
+    if not _client:
+        raise HTTPException(status_code=500, detail="RAG client not initialized")
+    
     try:
-        v = config.vector_db
-        payload = {
-            "vector_db_id": v.id,
-            "embedding_model": v.embedding,
-            "embedding_dimension": int(v.embedding_dimension),
-            "provider_id": v.provider,
-        }
-        client.vector_dbs.register(**payload)
-        logger.info(f"Mortgage vector DB '{v.id}' ready")
-        return True
-    except Exception as e:
-        if "already exists" in str(e).lower():
-            logger.info(f"Mortgage vector DB '{v.id}' already exists")
-            return True
-        logger.error(f"Failed to setup vector DB: {e}")
-        return False
-
-
-def _optimal_mortgage_rag_insert(client, config: AppConfig, documents: List[Dict], chunk_size: Optional[int] = None) -> Dict:
-    """Insert mortgage documents into RAG with proper metadata."""
-    try:
+        # Convert mortgage documents to RAG documents
         rag_documents = []
-        for doc in documents:
-            # Enhance metadata for mortgage-specific use
-            enhanced_metadata = {
-                "customer_id": doc["customer_id"],
-                "document_type": doc["document_type"],
-                "file_name": doc["file_name"],
-                "source": "mortgage_application",
-                **(doc.get("metadata", {}))
-            }
+        document_ids = []
+        
+        for doc in request.documents:
+            doc_id = str(uuid.uuid4())
+            document_ids.append(doc_id)
             
-            if doc.get("application_id"):
-                enhanced_metadata["application_id"] = doc["application_id"]
-            
+            # Create RAG document with proper metadata
             rag_doc = RAGDocument(
-                document_id=f"mortgage_{doc['customer_id']}_{doc['document_type']}_{uuid.uuid4().hex[:8]}",
-                content=doc["content"],
-                mime_type=doc.get("mime_type", "text/plain"),
-                metadata=enhanced_metadata
+                document_id=doc_id,
+                content=doc.content,
+                mime_type=doc.mime_type,
+                metadata={
+                    "customer_id": doc.customer_id,
+                    "application_id": doc.application_id,
+                    "document_type": doc.document_type,
+                    "file_name": doc.file_name,
+                    **(doc.metadata or {})
+                }
             )
             rag_documents.append(rag_doc)
         
-        # Insert using RAG tool
-        client.tool_runtime.rag_tool.insert(
+        # Ingest documents using LlamaStack client
+        response = await _client.post_rag_documents(
+            bank_id=_config.llamastack.rag_bank_id,
             documents=rag_documents,
-            vector_db_id=config.vector_db.id,
-            chunk_size_in_tokens=chunk_size or int(config.vector_db.chunk_size)
+            chunk_size_in_tokens=request.chunk_size_in_tokens
         )
         
-        return {
-            "status": "success",
-            "documents_ingested": len(rag_documents),
-            "vector_db_id": config.vector_db.id,
-            "chunk_size": chunk_size or int(config.vector_db.chunk_size)
-        }
+        logger.info(f"Successfully ingested {len(rag_documents)} documents for RAG")
+        
+        return IngestMortgageDocsResponse(
+            status="success",
+            message=f"Successfully processed {len(rag_documents)} documents",
+            processed_count=len(rag_documents),
+            document_ids=document_ids
+        )
         
     except Exception as e:
-        logger.error(f"RAG insertion error: {e}")
-        raise
+        logger.error(f"Failed to ingest documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to ingest documents: {str(e)}")
 
-
-# Router endpoints
-@router.post("/ingest")
-def ingest_mortgage_documents(request: IngestMortgageDocsRequest):
+@router.post("/query", response_model=QueryMortgageKnowledgeResponse)
+async def query_mortgage_knowledge(request: QueryMortgageKnowledgeRequest):
     """
-    Ingest mortgage documents into vector database for semantic search.
-    
-    Example:
-    {
-        "documents": [
-            {
-                "customer_id": "CUST_12345",
-                "application_id": "APP_67890",
-                "document_type": "driver_license",
-                "file_name": "johns_license.jpg",
-                "content": "CALIFORNIA DRIVER LICENSE John Smith...",
-                "metadata": {"upload_date": "2025-08-14"}
-            }
-        ]
-    }
+    Query the mortgage knowledge base using RAG.
     """
-    from ..main import get_client, get_config  # Import from main app
-    
-    client = get_client()
-    config = get_config()
-    
-    if not client or not config:
-        raise HTTPException(status_code=503, detail="Service not ready")
+    if not _client:
+        raise HTTPException(status_code=500, detail="RAG client not initialized")
     
     try:
-        # Ensure vector DB exists
-        if not _ensure_mortgage_vector_db(client, config):
-            raise HTTPException(status_code=503, detail="Vector DB not ready")
-        
-        # Convert request to documents
-        documents = []
-        for doc in request.documents:
-            documents.append({
-                "customer_id": doc.customer_id,
-                "application_id": doc.application_id,
-                "document_type": doc.document_type,
-                "file_name": doc.file_name,
-                "content": doc.content,
-                "mime_type": doc.mime_type,
-                "metadata": doc.metadata or {}
-            })
-        
-        # Ingest documents
-        result = _optimal_mortgage_rag_insert(client, config, documents, request.chunk_size_in_tokens)
-        
-        logger.info(f"Ingested {len(documents)} mortgage documents for customers: {list(set(d['customer_id'] for d in documents))}")
-        return result
-        
-    except Exception as e:
-        logger.error(f"Mortgage document ingestion error: {e}")
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
-
-
-@router.post("/query")
-def query_mortgage_documents(request: QueryMortgageDocsRequest):
-    """
-    Query mortgage documents using semantic search.
-    
-    Example:
-    {
-        "customer_id": "CUST_12345",
-        "query": "Find John's income information",
-        "document_types": ["pay_stub", "bank_statement"]
-    }
-    """
-    from ..main import get_client, get_config, get_agent
-    
-    client = get_client()
-    config = get_config()
-    
-    if not client or not config:
-        raise HTTPException(status_code=503, detail="Service not ready")
-    
-    try:
-        # Build enhanced query with filters
-        enhanced_query = request.query
+        # Build filter based on customer and document types
+        filters = {}
         if request.customer_id:
-            enhanced_query += f" for customer {request.customer_id}"
+            filters["customer_id"] = request.customer_id
         if request.document_types:
-            enhanced_query += f" in documents: {', '.join(request.document_types)}"
+            filters["document_type"] = {"$in": request.document_types}
         
-        # Use vector search (this would need to be implemented with the RAG tool)
-        # For now, return a structured response
-        return {
-            "query": request.query,
-            "enhanced_query": enhanced_query,
-            "customer_id": request.customer_id,
-            "results": f"RAG search results for: {enhanced_query}",
-            "document_types_searched": request.document_types,
-            "status": "success"
-        }
-        
-    except Exception as e:
-        logger.error(f"RAG query error: {e}")
-        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
-
-
-@router.post("/process")
-def process_with_rag(request: RAGProcessingRequest):
-    """
-    Process mortgage application using BOTH RAG search AND direct tools.
-    
-    This combines:
-    1. Semantic search across all customer documents in vector DB
-    2. Direct tool execution on current documents
-    3. Cross-validation between RAG results and tool results
-    """
-    from ..main import get_agent
-    
-    agent = get_agent()
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not ready")
-    
-    try:
-        # Create RAG-enhanced prompt
-        enhanced_prompt = f"""
-        Process this mortgage query using BOTH knowledge search AND your tools:
-        
-        Customer ID: {request.customer_id}
-        Query: {request.query}
-        
-        Please:
-        1. Search the knowledge base for all documents related to this customer
-        2. Use your direct tools for any real-time analysis needed
-        3. Compare and validate information from both sources
-        4. Provide a comprehensive analysis
-        """
-        
-        session_id = agent.create_session(f"rag-session-{uuid.uuid4().hex[:8]}")
-        
-        response = agent.create_turn(
-            messages=[{"role": "user", "content": enhanced_prompt}],
-            session_id=session_id,
-            stream=False
+        # Query the RAG system
+        response = await _client.query_rag(
+            bank_id=_config.llamastack.rag_bank_id,
+            query=request.query,
+            filters=filters,
+            max_chunks=request.max_chunks or 5
         )
         
-        # Extract response content
-        response_text = response.output_message.content if hasattr(response, 'output_message') else str(response)
+        # Process response
+        answer = response.get("answer", "No relevant information found.")
+        sources = response.get("sources", [])
+        confidence = response.get("confidence", 0.0)
         
-        return {
-            "customer_id": request.customer_id,
-            "query": request.query,
-            "analysis": response_text,
-            "method": "rag_plus_tools",
-            "session_id": session_id,
-            "status": "success"
-        }
+        return QueryMortgageKnowledgeResponse(
+            answer=answer,
+            sources=sources,
+            confidence=confidence
+        )
         
     except Exception as e:
-        logger.error(f"RAG processing error: {e}")
-        raise HTTPException(status_code=500, detail=f"RAG processing failed: {e}")
+        logger.error(f"Failed to query knowledge base: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to query knowledge base: {str(e)}")
+
+@router.get("/health")
+async def rag_health_check():
+    """Health check for RAG endpoints"""
+    if not _client:
+        raise HTTPException(status_code=500, detail="RAG client not initialized")
+    
+    try:
+        # Simple health check
+        return {
+            "status": "healthy",
+            "rag_bank_id": _config.llamastack.rag_bank_id if _config else None,
+            "timestamp": "2024-01-01T00:00:00Z"
+        }
+    except Exception as e:
+        logger.error(f"RAG health check failed: {e}")
+        raise HTTPException(status_code=500, detail=f"RAG health check failed: {str(e)}")
+
+# For backward compatibility with existing imports
+async def ingest_documents(documents: List[MortgageDocument], chunk_size: int = 512):
+    """Legacy function for document ingestion"""
+    request = IngestMortgageDocsRequest(
+        documents=documents,
+        chunk_size_in_tokens=chunk_size
+    )
+    return await ingest_mortgage_documents(request)
+
+async def query_knowledge_base(query: str, customer_id: str = None, max_chunks: int = 5):
+    """Legacy function for knowledge base queries"""
+    request = QueryMortgageKnowledgeRequest(
+        query=query,
+        customer_id=customer_id,
+        max_chunks=max_chunks
+    )
+    return await query_mortgage_knowledge(request)

@@ -13,6 +13,9 @@ from .config import AppConfig
 from .models import LoanType, DocumentType
 from .agent import create_mortgage_agent, MortgageProcessingAgent
 from .chat_router import chat_router, set_chat_dependencies
+from .application_router import application_router, set_application_dependencies
+from .rag_endpoints import router as rag_router, set_rag_dependencies
+from .context import MortgageConversationWorkflow
 
 # Configure logging
 logging.basicConfig(
@@ -24,12 +27,13 @@ logger = logging.getLogger("mortgage_processor")
 # Global variables
 _config: Optional[AppConfig] = None
 _agent: Optional[MortgageProcessingAgent] = None
+_workflow: Optional[MortgageConversationWorkflow] = None
 
 # FastAPI app
 app = FastAPI(
-    title="Mortgage Processing Agent API",
+    title="Agentic Mortgage Processing API",
     version="1.0.0",
-    description="Stateless AI-powered mortgage document processing using LlamaStack ReActAgent",
+    description="AI-powered mortgage processing with LlamaStack agents and agentic application workflow",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -43,8 +47,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include chat router
+# Include routers
 app.include_router(chat_router)
+app.include_router(application_router) 
+app.include_router(rag_router)
 
 # ---- Request/Response Models ----
 
@@ -92,6 +98,7 @@ class HealthResponse(BaseModel):
     ready: bool
     agent_initialized: bool
     config_loaded: bool
+    workflow_initialized: bool
     timestamp: str
 
 
@@ -135,28 +142,35 @@ def _extract_text_from_file(file_content: bytes, file_name: str) -> str:
 
 @app.on_event("startup")
 async def startup():
-    """Initialize the application with configuration and agent."""
-    global _config, _agent
+    """Initialize the application with configuration, agent, and LangGraph workflow."""
+    global _config, _agent, _workflow
     
     try:
         # Load configuration
         _config = AppConfig.load()
         logger.info("Configuration loaded successfully")
         
-        # Initialize mortgage processing agent
+        # Initialize mortgage processing agent (LlamaStack)
         _agent = create_mortgage_agent(_config)
         logger.info("Mortgage processing agent initialized successfully")
         
-        # Set chat dependencies
-        set_chat_dependencies(_config, _agent)
-        logger.info("Chat endpoints configured successfully")
+        # Initialize pure LangGraph conversation workflow
+        _workflow = MortgageConversationWorkflow(_config)
+        logger.info("Pure LangGraph conversation workflow initialized successfully")
         
-        logger.info(" Stateless Mortgage Processing API is ready!")
+        # Set dependencies for all routers
+        set_chat_dependencies(_config, _agent)
+        set_application_dependencies(_config, _workflow)
+        set_rag_dependencies(_config, _agent.client if _agent else None)
+        logger.info("All router dependencies configured successfully")
+        
+        logger.info(" Agentic Mortgage Processing API is ready!")
         
     except Exception as e:
         logger.error(f"Startup error: {e}", exc_info=True)
         _agent = None
         _config = None
+        _workflow = None
 
 
 @app.on_event("shutdown")
@@ -170,13 +184,14 @@ async def shutdown():
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint to verify service status."""
-    ready = all([_config, _agent])
+    ready = all([_config, _agent, _workflow])
     
     return HealthResponse(
         status="healthy" if ready else "unhealthy",
         ready=ready,
         agent_initialized=_agent is not None,
         config_loaded=_config is not None,
+        workflow_initialized=_workflow is not None,
         timestamp=datetime.now().isoformat()
     )
 

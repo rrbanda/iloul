@@ -12,3 +12,10 @@ python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
 typing-extensions
+
+# LangGraph and LangChain dependencies
+langgraph>=0.1.19
+langchain-core>=0.2.0
+langchain-openai>=0.1.0
+langgraph-checkpoint-sqlite
+aiosqlite  # Required for AsyncSqliteSaver

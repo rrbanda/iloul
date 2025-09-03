@@ -8,6 +8,13 @@ llamastack:
   base_url: "https://lss-lss.apps.prod.rhoai.rh-aiservices-bu.com"
   default_model: "llama-4-scout-17b-16e-w4a16"
 
+# LangGraph configuration (uses same model as LlamaStack)
+langgraph:
+  model: "llama-4-scout-17b-16e-w4a16"
+  temperature: 0.7
+  max_tokens: 2000
+  workflow_timeout_minutes: 30
+
 # Vector database configuration
 vector_db:
   default_db_id: "mortgage_docs"
@@ -108,6 +115,46 @@ agent_instructions:
     4. Continue with other tools and provide final analysis
     
     Remember: EXECUTE tools, don't describe them. Let the tools provide real data, then analyze that data.
+
+  # Instructions for MORTGAGE APPLICATION conversations (LangGraph workflow)
+  mortgage_application_conversation: |
+    You are a friendly mortgage application assistant. Your job is to collect all necessary information for a complete mortgage application through natural conversation.
+
+    CONVERSATION GUIDELINES:
+    - Be conversational, warm, and helpful
+    - Ask ONE question at a time
+    - Validate answers and ask follow-ups if needed
+    - Extract structured data from natural language responses
+    - Guide users step-by-step through the application process
+    - Never overwhelm users with multiple questions at once
+
+    INFORMATION TO COLLECT:
+    1. Personal Information: Full name, SSN, date of birth, phone, email
+    2. Current Address: Complete current address with ZIP code
+    3. Employment: Current employer, job title, years employed, employment type
+    4. Income: Gross annual income, additional income sources
+    5. Financial Details: Monthly debts, down payment amount, assets
+    6. Property Information: Property address, purchase price, property type
+    7. Loan Details: Loan amount needed, preferred loan type
+
+    CONVERSATION FLOW:
+    - Start with a warm greeting and explanation
+    - Ask simple questions first (name, basic info)
+    - Progress logically from personal → financial → property → loan details
+    - Validate important information by restating it
+    - Indicate progress throughout the conversation
+    - Signal when you have enough information to generate the application
+
+    EXAMPLES:
+    - "Hi! I'm here to help you apply for a mortgage. This will take about 10-15 minutes. Let's start with your full legal name."
+    - "Great! Now, what's your current gross annual income?"
+    - "Perfect! I have all the information I need. Let me prepare your application form..."
+
+    VALIDATION:
+    - Ensure required fields are complete
+    - Ask for clarification on unclear responses
+    - Confirm important financial details
+    - Check that all URLA 1003 required fields are collected
 
 # Prompt templates
 prompts:
@@ -242,6 +289,174 @@ mortgage:
     # ID format templates
     session_id_format: "mortgage-session-{}"
     application_id_format: "APP_{}"
+
+# LangGraph Mortgage Application Workflow Configuration
+mortgage_application_workflow:
+  # Application data structure (URLA 1003 form fields)
+  required_fields:
+    personal_info:
+      - field: "full_name"
+        display: "Full Legal Name"
+        required: true
+        validation: "text_min_length_2"
+      - field: "ssn"
+        display: "Social Security Number"
+        required: true
+        validation: "ssn_format"
+      - field: "date_of_birth"
+        display: "Date of Birth"
+        required: true
+        validation: "date_format"
+      - field: "phone"
+        display: "Phone Number"
+        required: true
+        validation: "phone_format"
+      - field: "email"
+        display: "Email Address"
+        required: true
+        validation: "email_format"
+      
+    current_address:
+      - field: "street_address"
+        display: "Street Address"
+        required: true
+        validation: "text_min_length_5"
+      - field: "city"
+        display: "City"
+        required: true
+        validation: "text_min_length_2"
+      - field: "state"
+        display: "State"
+        required: true
+        validation: "state_code"
+      - field: "zip_code"
+        display: "ZIP Code"
+        required: true
+        validation: "zip_format"
+      - field: "years_at_address"
+        display: "Years at Current Address"
+        required: true
+        validation: "numeric_positive"
+        
+    employment:
+      - field: "employer_name"
+        display: "Current Employer"
+        required: true
+        validation: "text_min_length_2"
+      - field: "job_title"
+        display: "Job Title/Position"
+        required: true
+        validation: "text_min_length_2"
+      - field: "years_employed"
+        display: "Years with Current Employer"
+        required: true
+        validation: "numeric_positive"
+      - field: "employment_type"
+        display: "Employment Type"
+        required: true
+        validation: "employment_type_enum"
+        
+    financial:
+      - field: "gross_annual_income"
+        display: "Gross Annual Income"
+        required: true
+        validation: "numeric_positive"
+      - field: "additional_income"
+        display: "Additional Monthly Income"
+        required: false
+        validation: "numeric_positive_or_zero"
+      - field: "monthly_debts"
+        display: "Total Monthly Debt Payments"
+        required: true
+        validation: "numeric_positive_or_zero"
+      - field: "down_payment"
+        display: "Down Payment Amount"
+        required: true
+        validation: "numeric_positive"
+      - field: "assets_savings"
+        display: "Total Assets/Savings"
+        required: true
+        validation: "numeric_positive_or_zero"
+        
+    property:
+      - field: "property_address"
+        display: "Property Address"
+        required: true
+        validation: "text_min_length_5"
+      - field: "property_city"
+        display: "Property City"
+        required: true
+        validation: "text_min_length_2"
+      - field: "property_state"
+        display: "Property State"
+        required: true
+        validation: "state_code"
+      - field: "property_zip"
+        display: "Property ZIP Code"
+        required: true
+        validation: "zip_format"
+      - field: "purchase_price"
+        display: "Purchase Price"
+        required: true
+        validation: "numeric_positive"
+      - field: "property_type"
+        display: "Property Type"
+        required: true
+        validation: "property_type_enum"
+        
+    loan_details:
+      - field: "loan_amount"
+        display: "Loan Amount Requested"
+        required: true
+        validation: "numeric_positive"
+      - field: "loan_type"
+        display: "Preferred Loan Type"
+        required: true
+        validation: "loan_type_enum"
+      - field: "loan_purpose"
+        display: "Loan Purpose"
+        required: true
+        validation: "loan_purpose_enum"
+
+  # Workflow configuration
+  conversation_flow:
+    timeout_minutes: 30
+    max_retries_per_question: 3
+    completion_threshold: 0.95  # 95% of required fields must be collected
+    
+  # Validation rules
+  validation_patterns:
+    ssn_format: "^\\d{3}-\\d{2}-\\d{4}$|^\\d{9}$"
+    phone_format: "^\\+?1?[-\\s\\.]?\\(?\\d{3}\\)?[-\\s\\.]?\\d{3}[-\\s\\.]?\\d{4}$"
+    email_format: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    zip_format: "^\\d{5}(-\\d{4})?$"
+    date_format: "^\\d{2}/\\d{2}/\\d{4}$|^\\d{4}-\\d{2}-\\d{2}$"
+    
+  # Enum values
+  enums:
+    employment_type:
+      - "Full-time W-2"
+      - "Part-time W-2"
+      - "Self-employed"
+      - "Contract/1099"
+      - "Retired"
+      - "Other"
+    property_type:
+      - "Single Family Home"
+      - "Condominium"
+      - "Townhouse"
+      - "Multi-family (2-4 units)"
+      - "Manufactured Home"
+    loan_type:
+      - "Conventional"
+      - "FHA"
+      - "VA"
+      - "USDA"
+      - "Jumbo"
+    loan_purpose:
+      - "Purchase"
+      - "Refinance"
+      - "Cash-out Refinance"
 
 # Response formatting
 response_format:
