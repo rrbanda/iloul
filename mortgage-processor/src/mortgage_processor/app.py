@@ -15,6 +15,7 @@ from .agent import create_mortgage_agent, MortgageProcessingAgent
 from .chat_router import chat_router, set_chat_dependencies
 from .application_router import application_router, set_application_dependencies
 from .rag_endpoints import router as rag_router, set_rag_dependencies
+from .admin_dashboard import admin_router
 from .context import MortgageConversationWorkflow
 
 # Configure logging
@@ -51,6 +52,7 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(application_router) 
 app.include_router(rag_router)
+app.include_router(admin_router)  # Admin dashboard
 
 # ---- Request/Response Models ----
 
@@ -154,9 +156,9 @@ async def startup():
         _agent = create_mortgage_agent(_config)
         logger.info("Mortgage processing agent initialized successfully")
         
-        # Initialize pure LangGraph conversation workflow
+        # Initialize  LangGraph conversation workflow
         _workflow = MortgageConversationWorkflow(_config)
-        logger.info("Pure LangGraph conversation workflow initialized successfully")
+        logger.info(" LangGraph conversation workflow initialized successfully")
         
         # Set dependencies for all routers
         set_chat_dependencies(_config, _agent)

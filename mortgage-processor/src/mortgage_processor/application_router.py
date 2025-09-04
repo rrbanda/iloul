@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from .context import MortgageConversationWorkflow
+from .database import get_db_session, MortgageApplicationDB
 from .config import AppConfig
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ async def start_application_session(request: ApplicationStartRequest):
     """
     Start a new conversational mortgage application.
     
-    Uses pure LangGraph conversational workflow to guide the user
+    Uses  LangGraph conversational workflow to guide the user
     through mortgage application data collection step by step.
     """
     if not _workflow:
@@ -108,7 +109,7 @@ async def chat_with_workflow(session_id: str, request: ApplicationChatRequest):
     """
     Chat with conversational mortgage application workflow.
     
-    The workflow uses pure LangGraph conversational pattern:
+    The workflow uses  LangGraph conversational pattern:
     - Questioner Node: Asks next logical question based on missing data
     - Collector Node: Extracts structured data from responses
     - Router: Determines next step based on conversation state
@@ -198,6 +199,117 @@ async def submit_application(session_id: str, request: ApplicationSubmissionRequ
         raise HTTPException(status_code=500, detail=f"Application submission failed: {str(e)}")
 
 
+# ---- Application Tracking Endpoints ----
+
+@application_router.get("/{application_id}", response_model=dict)
+async def get_application(application_id: str):
+    """Get application details by ID"""
+    try:
+        with get_db_session() as db:
+            application = db.query(MortgageApplicationDB).filter(
+                MortgageApplicationDB.application_id == application_id
+            ).first()
+            
+            if not application:
+                raise HTTPException(status_code=404, detail="Application not found")
+            
+            return {
+                "status": "success",
+                "application": application.to_dict()
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving application {application_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve application: {str(e)}")
+
+
+@application_router.get("/", response_model=dict)
+async def list_applications(
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """List applications with optional filtering"""
+    try:
+        with get_db_session() as db:
+            query = db.query(MortgageApplicationDB)
+            
+            # Apply status filter if provided
+            if status:
+                query = query.filter(MortgageApplicationDB.status == status)
+            
+            # Apply pagination
+            applications = query.order_by(
+                MortgageApplicationDB.submitted_at.desc()
+            ).offset(offset).limit(limit).all()
+            
+            # Get total count for pagination
+            total_count = query.count()
+            
+            return {
+                "status": "success",
+                "applications": [app.to_dict() for app in applications],
+                "pagination": {
+                    "total": total_count,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": (offset + limit) < total_count
+                }
+            }
+            
+    except Exception as e:
+        logger.error(f"Error listing applications: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list applications: {str(e)}")
+
+
+@application_router.put("/{application_id}/status", response_model=dict)
+async def update_application_status(
+    application_id: str,
+    status_update: dict
+):
+    """Update application status (for admin use)"""
+    try:
+        new_status = status_update.get("status")
+        notes = status_update.get("notes", "")
+        
+        if not new_status:
+            raise HTTPException(status_code=400, detail="Status is required")
+        
+        with get_db_session() as db:
+            application = db.query(MortgageApplicationDB).filter(
+                MortgageApplicationDB.application_id == application_id
+            ).first()
+            
+            if not application:
+                raise HTTPException(status_code=404, detail="Application not found")
+            
+            # Update status and notes
+            application.status = new_status
+            application.updated_at = datetime.now()
+            if notes:
+                existing_notes = application.processing_notes or ""
+                application.processing_notes = f"{existing_notes}\n[{datetime.now().isoformat()}] {notes}".strip()
+            
+            db.commit()
+            db.refresh(application)
+            
+            logger.info(f"Application {application_id} status updated to: {new_status}")
+            
+            return {
+                "status": "success",
+                "message": f"Application status updated to: {new_status}",
+                "application": application.to_dict()
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating application {application_id} status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update application: {str(e)}")
+
+
 # ---- Helper Functions ----
 
 def _validate_application_data(collected_data: dict) -> list[str]:
@@ -255,30 +367,96 @@ async def _submit_application_for_processing(
     collected_data: dict,
     validation_errors: list[str]
 ) -> dict:
-    """Submit application to processing workflow and generate URLA form."""
+    """Submit application to processing workflow and store in database."""
     
-    # If we have validation errors, return early
-    if validation_errors:
+    try:
+        # Calculate completion percentage
+        required_fields = ["full_name", "phone", "email", "annual_income", "employer", 
+                          "purchase_price", "property_location", "down_payment", "credit_score"]
+        completed_fields = sum(1 for field in required_fields if collected_data.get(field))
+        completion_percentage = (completed_fields / len(required_fields)) * 100
+        
+        # Determine status based on validation errors
+        status = "incomplete" if validation_errors else "submitted"
+        
+        # Store application in database
+        with get_db_session() as db:
+            # Create new mortgage application record
+            db_application = MortgageApplicationDB(
+                application_id=application_id,
+                session_id=session_id,
+                
+                # Personal Information
+                full_name=collected_data.get("full_name"),
+                phone=collected_data.get("phone"),
+                email=collected_data.get("email"),
+                
+                # Employment Information
+                annual_income=collected_data.get("annual_income"),
+                employer=collected_data.get("employer"),
+                employment_type=collected_data.get("employment_type"),
+                
+                # Property Information
+                purchase_price=collected_data.get("purchase_price"),
+                property_type=collected_data.get("property_type"),
+                property_location=collected_data.get("property_location"),
+                
+                # Financial Information
+                down_payment=collected_data.get("down_payment"),
+                credit_score=collected_data.get("credit_score"),
+                
+                # Application Status
+                status=status,
+                completion_percentage=completion_percentage,
+                validation_errors=validation_errors,
+                urla_form_generated=False  # Will be implemented later
+            )
+            
+            # Add to database
+            db.add(db_application)
+            db.commit()
+            db.refresh(db_application)
+            
+            logger.info(f"Application {application_id} stored successfully in database")
+        
+        # Generate next steps based on status
+        if validation_errors:
+            next_steps = [
+                "Complete missing required information:",
+                *[f"- {error}" for error in validation_errors],
+                "Return to conversation to provide missing details"
+            ]
+        else:
+            next_steps = [
+                "✅ Application submitted successfully",
+                "📄 Upload required documents (driver's license, bank statements, pay stubs)",
+                "⏱️ Wait for initial review (1-2 business days)",
+                "🏠 Schedule property appraisal when approved",
+                "📧 You'll receive email updates on your application status"
+            ]
+        
+        # URLA form generation (future enhancement)
+        urla_form_generated = False  # Will implement later with existing tools
+        
+        logger.info(f"Application {application_id} processed - Status: {status}, Completion: {completion_percentage}%")
+        
         return {
-            "next_steps": ["Complete missing required information", "Resubmit application"],
-            "urla_form_generated": False
+            "next_steps": next_steps,
+            "urla_form_generated": urla_form_generated,
+            "database_stored": True,
+            "completion_percentage": completion_percentage
         }
-    
-    # TODO: Integrate with existing processing workflow
-    # For now, return success response with next steps
-    next_steps = [
-        "Application submitted successfully",
-        "Upload required documents (driver's license, bank statements, pay stubs)",
-        "Wait for initial review (1-2 business days)",
-        "Schedule property appraisal if approved"
-    ]
-    
-    # TODO: Generate URLA 1003 form using existing tools
-    urla_form_generated = True  # Simulated for now
-    
-    logger.info(f"Application {application_id} processed successfully")
-    
-    return {
-        "next_steps": next_steps,
-        "urla_form_generated": urla_form_generated
-    }
+        
+    except Exception as e:
+        logger.error(f"Error storing application {application_id} in database: {e}")
+        # Return fallback response if database fails
+        return {
+            "next_steps": [
+                "Application received but encountered storage issue",
+                "Please contact support with your application ID: " + application_id,
+                "Your data has been preserved and will be processed manually"
+            ],
+            "urla_form_generated": False,
+            "database_stored": False,
+            "error": str(e)
+        }

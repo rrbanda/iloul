@@ -13,6 +13,7 @@ from typing import Dict, List, Any, Optional
 from llama_stack_client.lib.agents.client_tool import client_tool
 from langchain_core.tools import tool
 from .models import DocumentType
+from .database import get_db_session, MortgageApplicationDB
 
 logger = logging.getLogger(__name__)
 
@@ -658,6 +659,149 @@ def extract_financial_info(text: str) -> Dict[str, Any]:
 def analyze_application_state() -> str:
     """Request application state analysis"""
     return "STATE_ANALYSIS_REQUESTED"
+
+# =============================================================================
+# DATABASE TOOLS - Agentic Application Submission
+# =============================================================================
+
+class ApplicationSubmissionSchema(BaseModel):
+    """Schema for submitting mortgage application - simplified for Llama models"""
+    application_data: str = Field(
+        description="Complete application data as formatted string: 'session_id|full_name|phone|email|annual_income|employer|employment_type|purchase_price|property_type|property_location|down_payment|credit_score'"
+    )
+
+@tool("submit_application_to_database", args_schema=ApplicationSubmissionSchema, parse_docstring=True)
+def submit_application_to_database(application_data: str) -> str:
+    """Submit completed mortgage application to database.
+    
+    Use this tool when the customer wants to submit their completed application.
+    This will store all collected information in the database and generate an application ID.
+    
+    Args:
+        application_data: Pipe-separated application data string containing:
+            session_id|full_name|phone|email|annual_income|employer|employment_type|purchase_price|property_type|property_location|down_payment|credit_score
+        
+    Returns:
+        Success or error message with application ID
+    """
+    try:
+        # Parse the application data string
+        parts = application_data.split('|')
+        if len(parts) != 12:
+            return f"❌ Invalid application data format. Expected 12 fields, got {len(parts)}"
+        
+        session_id, full_name, phone, email, annual_income_str, employer, employment_type, \
+        purchase_price_str, property_type, property_location, down_payment_str, credit_score_str = parts
+        
+        # Convert numeric fields
+        annual_income = int(annual_income_str)
+        purchase_price = int(purchase_price_str)
+        down_payment = int(down_payment_str)
+        credit_score = int(credit_score_str)
+        
+        # Generate unique application ID
+        application_id = f"APP_{datetime.now().strftime('%Y%m%d')}_{uuid.uuid4().hex[:8].upper()}"
+        
+        # Calculate completion percentage (assume all fields are now provided)
+        completion_percentage = 100.0
+        
+        # Store in database
+        with get_db_session() as db:
+            db_application = MortgageApplicationDB(
+                application_id=application_id,
+                session_id=session_id,
+                full_name=full_name,
+                phone=phone,
+                email=email,
+                annual_income=annual_income,
+                employer=employer,
+                employment_type=employment_type,
+                purchase_price=purchase_price,
+                property_type=property_type,
+                property_location=property_location,
+                down_payment=down_payment,
+                credit_score=credit_score,
+                status="submitted",
+                completion_percentage=completion_percentage,
+                next_steps=[
+                    "Application review in progress",
+                    "Document verification",
+                    "Credit check authorization",
+                    "Property appraisal scheduling"
+                ]
+            )
+            db.add(db_application)
+            db.commit()
+        
+        logger.info(f"Application {application_id} submitted successfully for session {session_id}")
+        
+        return f"✅ Excellent! Your mortgage application has been submitted successfully!\n\n" \
+               f"**Application ID: {application_id}**\n\n" \
+               f"Here's what happens next:\n" \
+               f"• You'll receive email confirmations within the next hour\n" \
+               f"• Our underwriting team will review your application within 1-2 business days\n" \
+               f"• You'll be contacted for document uploads and verification\n" \
+               f"• Property appraisal will be scheduled if initially approved\n\n" \
+               f"You can reference your application using ID: **{application_id}**\n\n" \
+               f"Is there anything else I can help you with regarding your mortgage application?"
+    
+    except Exception as e:
+        logger.error(f"Error submitting application: {str(e)}")
+        return f"❌ I apologize, but there was an issue submitting your application: {str(e)}. " \
+               f"Please try again in a moment, or let me know if you need assistance."
+
+class ApplicationStatusSchema(BaseModel):
+    """Schema for checking application status"""
+    application_id: str = Field(description="Application ID to check status for")
+
+@tool("check_application_status", args_schema=ApplicationStatusSchema, parse_docstring=True)
+def check_application_status(application_id: str) -> str:
+    """Check the status of a submitted mortgage application.
+    
+    Use this tool when a customer wants to check on their application status
+    using their application ID.
+    
+    Args:
+        application_id: The application ID to check status for
+        
+    Returns:
+        Application status information or error message
+    """
+    try:
+        with get_db_session() as db:
+            app = db.query(MortgageApplicationDB).filter(
+                MortgageApplicationDB.application_id == application_id
+            ).first()
+            
+            if not app:
+                return f"❌ No application found with ID: {application_id}. " \
+                       f"Please double-check the application ID and try again."
+            
+            # Format status information
+            status_info = f"📋 **Application Status for {application_id}**\n\n" \
+                         f"• **Status**: {app.status.title()}\n" \
+                         f"• **Completion**: {app.completion_percentage:.1f}%\n" \
+                         f"• **Submitted**: {app.submitted_at.strftime('%B %d, %Y at %I:%M %p')}\n" \
+                         f"• **Last Updated**: {app.updated_at.strftime('%B %d, %Y at %I:%M %p')}\n\n"
+            
+            if app.next_steps:
+                status_info += "**Next Steps:**\n"
+                for i, step in enumerate(app.next_steps, 1):
+                    status_info += f"{i}. {step}\n"
+                status_info += "\n"
+            
+            if app.processing_notes:
+                status_info += f"**Processing Notes**: {app.processing_notes}\n\n"
+                
+            status_info += "Is there anything specific about your application you'd like to know more about?"
+            
+            return status_info
+    
+    except Exception as e:
+        logger.error(f"Error checking application status: {str(e)}")
+        return f"❌ There was an error checking the application status: {str(e)}. " \
+               f"Please try again or contact support if the issue persists."
+
 
 # =============================================================================
 # REACT AGENT TOOLS - Dynamic UI and Prompt Generation

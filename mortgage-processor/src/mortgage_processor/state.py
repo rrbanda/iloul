@@ -39,3 +39,16 @@ class MortgageApplicationState(MessagesState):
     application_id: NotRequired[str]
     risk_assessment: NotRequired[str]
     approval_status: NotRequired[str]
+    
+    # Subgraph interaction tracking
+    last_interaction_type: NotRequired[str]  # "react_agent", "data_agent", "info_agent"
+    handoff_reason: NotRequired[str]
+    
+    # ReactAgent subgraph fields
+    current_prompts: NotRequired[List[Dict[str, Any]]]
+    guidance_steps: NotRequired[List[str]]
+    
+    # InfoAgent subgraph fields
+    topics_discussed: NotRequired[List[str]]
+    loan_types_mentioned: NotRequired[List[str]]
+    user_expertise_level: NotRequired[str]  # "beginner", "intermediate", "advanced"

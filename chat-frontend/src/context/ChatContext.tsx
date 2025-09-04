@@ -256,6 +256,7 @@ interface ChatContextType {
   startMortgageApplication: () => Promise<void>
   sendMortgageMessage: (message: string) => Promise<void>
   submitMortgageApplication: (collectedData: Record<string, any>) => Promise<ApplicationSubmissionResponse | null>
+  checkApplicationStatus: (applicationId: string) => Promise<any>
   clearMortgageApplication: () => void
   setMortgageApplication: (data: { isActive: boolean; sessionId?: string; completionPercentage?: number; phase?: string; isComplete?: boolean; collectedData?: Record<string, any> }) => void
   updateMortgageApplication: (data: Partial<{ sessionId: string; completionPercentage: number; phase: string; isComplete: boolean; collectedData: Record<string, any> }>) => void
@@ -481,7 +482,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const goHome = () => {
     dispatch({ type: 'SET_CURRENT_SESSION', payload: null })
     dispatch({ type: 'SET_MESSAGES', payload: [] })
-    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: { isActive: false } })
+    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: { 
+      isActive: false,
+      sessionId: undefined,
+      completionPercentage: 0,
+      phase: 'initial',
+      isComplete: false,
+      collectedData: undefined
+    } })
+    dispatch({ type: 'CLEAR_WIZARD', payload: null })
+    dispatch({ type: 'SET_ERROR', payload: null })
   }
 
   const setMortgageApplication = (data: { isActive: boolean; sessionId?: string; completionPercentage?: number; phase?: string; isComplete?: boolean; collectedData?: Record<string, any> }) => {
@@ -632,9 +642,42 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const checkApplicationStatus = async (applicationId: string) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true })
+      dispatch({ type: 'SET_ERROR', payload: null })
+
+      // Check application status via API
+      const response = await AgenticApplicationAPI.checkApplicationStatus(applicationId)
+
+      // Show status in a toast
+      toast.success(`Application ${applicationId}: ${response.status} (${response.completion_percentage}% complete)`)
+
+      return response
+
+    } catch (error) {
+      console.error('Failed to check application status:', error)
+      const message = error instanceof Error ? error.message : 'Failed to check application status'
+      dispatch({ type: 'SET_ERROR', payload: message })
+      toast.error(message)
+      return null
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }
+
   const clearMortgageApplication = () => {
-    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: { isActive: false } })
+    // Completely reset mortgage application state to initial values
+    dispatch({ type: 'SET_MORTGAGE_APPLICATION', payload: { 
+      isActive: false,
+      sessionId: undefined,
+      completionPercentage: 0,
+      phase: 'initial',
+      isComplete: false,
+      collectedData: undefined
+    } })
     dispatch({ type: 'SET_MESSAGES', payload: [] })
+    dispatch({ type: 'SET_CURRENT_SESSION', payload: null })
   }
 
   const clearError = () => {
@@ -709,6 +752,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     startMortgageApplication,
     sendMortgageMessage,
     submitMortgageApplication,
+    checkApplicationStatus,
     clearMortgageApplication,
     setMortgageApplication,
     updateMortgageApplication,

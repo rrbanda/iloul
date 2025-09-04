@@ -12,6 +12,7 @@ python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
 typing-extensions
+jinja2>=3.0.0  # For admin dashboard templates
 
 # LangGraph and LangChain dependencies
 langgraph>=0.1.19

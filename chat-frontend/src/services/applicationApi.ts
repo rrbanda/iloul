@@ -54,6 +54,36 @@ interface ApplicationSubmissionResponse {
   urla_form_generated: boolean
 }
 
+interface ApplicationStatusResponse {
+  application_id: string
+  session_id: string
+  status: string
+  completion_percentage: number
+  submitted_at: string
+  updated_at: string
+  personal_info: {
+    full_name?: string
+    phone?: string
+    email?: string
+  }
+  employment_info: {
+    annual_income?: number
+    employer?: string
+    employment_type?: string
+  }
+  property_info: {
+    purchase_price?: number
+    property_type?: string
+    property_location?: string
+  }
+  financial_info: {
+    down_payment?: number
+    credit_score?: number
+  }
+  next_steps: string[]
+  processing_notes?: string
+}
+
 // Use same base URL as existing API
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -128,6 +158,14 @@ export class AgenticApplicationAPI {
     return response.data
   }
 
+  // Check application status by application ID
+  static async checkApplicationStatus(applicationId: string): Promise<ApplicationStatusResponse> {
+    const response: AxiosResponse<ApplicationStatusResponse> = await api.get(
+      `/applications/${applicationId}`
+    )
+    return response.data
+  }
+
   // Health check for agentic service
   static async healthCheck(): Promise<any> {
     const response = await api.get('/health')
@@ -140,5 +178,6 @@ export type {
   AgenticStartResponse, 
   AgenticChatResponse, 
   ApplicationSubmissionResponse,
-  ApplicationSubmissionRequest 
+  ApplicationSubmissionRequest,
+  ApplicationStatusResponse
 }

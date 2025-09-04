@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 import json
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, String, DateTime, Text, Integer, Boolean, ForeignKey, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.types import TypeDecorator, TEXT
@@ -103,6 +103,86 @@ class ChatMessageDB(Base):
             "processing_result": self.processing_result,
             "confidence_score": float(self.confidence_score) if self.confidence_score else None,
             "tool_calls": self.tool_calls or []
+        }
+
+
+class MortgageApplicationDB(Base):
+    """SQLAlchemy model for mortgage applications"""
+    __tablename__ = "mortgage_applications"
+    
+    # Primary identification
+    application_id = Column(String(50), primary_key=True)
+    session_id = Column(String(50), ForeignKey("chat_sessions.session_id"), nullable=False)
+    
+    # Personal Information
+    full_name = Column(String(200), nullable=True)
+    phone = Column(String(20), nullable=True)
+    email = Column(String(100), nullable=True)
+    
+    # Employment Information
+    annual_income = Column(Integer, nullable=True)
+    employer = Column(String(200), nullable=True)
+    employment_type = Column(String(50), nullable=True)
+    
+    # Property Information
+    purchase_price = Column(Integer, nullable=True)
+    property_type = Column(String(100), nullable=True)
+    property_location = Column(String(200), nullable=True)
+    
+    # Financial Information
+    down_payment = Column(Integer, nullable=True)
+    credit_score = Column(Integer, nullable=True)
+    
+    # Application Metadata
+    status = Column(String(50), default="submitted")
+    completion_percentage = Column(Float, default=0.0)
+    submitted_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # Processing Information
+    validation_errors = Column(JSONField, default=list)
+    next_steps = Column(JSONField, default=list)
+    urla_form_generated = Column(Boolean, default=False)
+    processing_notes = Column(Text, nullable=True)
+    
+    # Relationship to session
+    session = relationship("ChatSessionDB", foreign_keys=[session_id])
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "application_id": self.application_id,
+            "session_id": self.session_id,
+            "personal_info": {
+                "full_name": self.full_name,
+                "phone": self.phone,
+                "email": self.email
+            },
+            "employment_info": {
+                "annual_income": self.annual_income,
+                "employer": self.employer,
+                "employment_type": self.employment_type
+            },
+            "property_info": {
+                "purchase_price": self.purchase_price,
+                "property_type": self.property_type,
+                "property_location": self.property_location
+            },
+            "financial_info": {
+                "down_payment": self.down_payment,
+                "credit_score": self.credit_score
+            },
+            "application_status": {
+                "status": self.status,
+                "completion_percentage": self.completion_percentage,
+                "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            },
+            "processing_info": {
+                "validation_errors": self.validation_errors or [],
+                "next_steps": self.next_steps or [],
+                "urla_form_generated": self.urla_form_generated,
+                "processing_notes": self.processing_notes
+            }
         }
 
 
