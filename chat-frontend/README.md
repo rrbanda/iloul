@@ -43,12 +43,13 @@ chat-frontend/
 Create a `.env` file in the root directory:
 
 ```env
-# API Base URL (FastAPI backend)
-VITE_API_BASE_URL=http://localhost:8000
+# LangGraph API Base URL (LangGraph Dev Server)
+VITE_API_BASE_URL=http://localhost:2024
 
 # App Configuration  
-VITE_APP_NAME=Mortgage Chat Assistant
+VITE_APP_NAME=Mortgage Processing System
 VITE_ENVIRONMENT=development
+VITE_DEBUG_MODE=true
 ```
 
 ## 🛠️ Tech Stack
@@ -65,15 +66,28 @@ VITE_ENVIRONMENT=development
 
 ## 🔌 Backend Integration
 
-The frontend connects to the FastAPI backend running on `http://localhost:8000`. 
+The frontend connects to the **LangGraph Development Server** running on `http://localhost:2024`. 
 
-### Key API Endpoints:
+### Key LangGraph API Endpoints:
 
-- `POST /chat/sessions/start` - Start new chat session
-- `GET /chat/sessions` - List chat sessions  
-- `POST /chat/sessions/{id}/messages` - Send message
-- `POST /chat/sessions/{id}/upload` - Upload files
-- `GET /health` - Health check
+- `POST /threads` - Create new LangGraph thread (session)
+- `GET /threads/{thread_id}` - Get thread information
+- `POST /threads/{thread_id}/runs` - Execute LangGraph workflow
+- `GET /threads/{thread_id}/runs/{run_id}` - Check run status
+- `GET /threads/{thread_id}/state` - Get thread state and messages
+- `PATCH /threads/{thread_id}/state` - Update thread state
+
+### Multi-Agent System:
+The LangGraph backend orchestrates **8 specialized agents**:
+- **SupervisorAgent** - Routes to appropriate agents
+- **AssistantAgent** - Customer guidance and education
+- **DataAgent** - Data collection and processing
+- **PropertyAgent** - Property valuation and analysis
+- **UnderwritingAgent** - Risk analysis and loan decisions
+- **ComplianceAgent** - Regulatory compliance
+- **ClosingAgent** - Closing coordination
+- **CustomerServiceAgent** - Post-submission support
+- **ApplicationAgent** - Interactive application processing
 
 ## 🎨 Features
 
@@ -121,12 +135,13 @@ npm run build
 npm run preview
 ```
 
-## 🔄 Connecting to Backend
+## 🔄 Connecting to LangGraph Backend
 
-1. **Start the FastAPI backend** first:
+1. **Start the LangGraph Development Server** first:
    ```bash
    cd ../mortgage-processor
-   python run.py
+   source venv/bin/activate
+   langgraph dev
    ```
 
 2. **Then start the frontend**:
@@ -136,8 +151,15 @@ npm run preview
 
 3. **Access the application**:
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+   - LangGraph API: http://localhost:2024
+   - LangGraph Studio: https://smith.langchain.com/studio/?baseUrl=http://localhost:2024
+   - API Docs: http://localhost:2024/docs
+
+### 🎯 How It Works:
+- Frontend sends messages via LangGraph API threads
+- LangGraph **Supervisor** routes to appropriate agents
+- Agents process requests using **RAG** and **Neo4j** integration
+- Responses stream back through the thread state
 
 ## 📱 Usage
 
@@ -162,12 +184,26 @@ For production deployment:
 
 ## 🤝 Architecture
 
-This frontend follows the same separation pattern as your tech-explorer project:
+This frontend integrates with the **LangGraph Multi-Agent System**:
 
-- **Separate codebase** from backend
-- **API-first communication** via HTTP/REST
+- **Separate codebase** from LangGraph backend
+- **LangGraph API communication** via threads and runs
 - **Modern React patterns** with hooks and context
 - **TypeScript throughout** for type safety
 - **Component-based architecture** for reusability
 
-The chat interface provides a familiar ChatGPT-like experience while integrating seamlessly with your existing mortgage processing agent.
+### 🏗️ System Architecture:
+```
+Frontend (React) → LangGraph API → Supervisor → 8 Specialized Agents
+                                              ↓
+                                    RAG + Neo4j + FAISS Vector DB
+```
+
+### 🔄 Message Flow:
+1. **User** sends message via React frontend
+2. **LangGraph Thread** receives message and starts run
+3. **Supervisor Agent** analyzes intent and routes to appropriate agent
+4. **Specialized Agent** processes request with tools and knowledge
+5. **Response** flows back through thread state to frontend
+
+The chat interface provides a familiar ChatGPT-like experience while leveraging the full power of the multi-agent mortgage processing system.

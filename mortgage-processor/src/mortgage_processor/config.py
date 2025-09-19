@@ -1,8 +1,15 @@
 import os
 import yaml
+from pathlib import Path
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field, ValidationError, ConfigDict
 from typing import Optional, List, Dict, Any
 from .models import DocumentType, MortgageBaseModel  # Import shared types to avoid duplication
+
+# Load environment variables from .env file
+# Look for .env in the project root (mortgage-processor directory)
+dotenv_path = Path(__file__).parent.parent.parent / '.env'
+load_dotenv(dotenv_path=dotenv_path)
 
 
 class AppMeta(BaseModel):
@@ -14,6 +21,7 @@ class AppMeta(BaseModel):
 class LlamaStackConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     base_url: str
+    api_key: str
     default_model: str
 
 

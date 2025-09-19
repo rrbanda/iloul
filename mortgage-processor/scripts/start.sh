@@ -1,7 +1,10 @@
 #!/bin/bash
-# Start script for Mortgage Processing Agent
+# Start script for Complete Mortgage Processing Backend
 
-echo "🚀 Starting Mortgage Processing Agent API..."
+echo "🚀 Starting Complete Mortgage Processing Backend..."
+echo "   - LangGraph API Server"
+echo "   - A2A Orchestrator" 
+echo "   - Web Search Agent"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,5 +18,5 @@ source venv/bin/activate
 # Set environment variables
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 
-# Start the application
-python run.py
+# Start the unified backend
+python start_backend.py

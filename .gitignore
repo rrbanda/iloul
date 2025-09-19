@@ -235,6 +235,14 @@ $RECYCLE.BIN/
 mortgage-processor/venv/
 mortgage-processor/scripts/venv/
 
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
 # Configuration files with secrets (keep template versions)
 config.local.yaml
 config.prod.yaml
@@ -286,3 +294,50 @@ customer_docs/*.png
 customer_docs/*.jpeg
 # Keep the markdown examples
 !customer_docs/*.md
+
+# LangGraph specific files
+.langgraph_api/
+.langgraph/
+langgraph_studio/
+
+# Vector databases and AI models
+faiss_db/
+chroma_db/
+*.index
+*.faiss
+*.pkl
+*.pickle
+
+# LangChain/LangGraph cache
+.langchain_cache/
+.langsmith_cache/
+
+# AI model downloads and cache
+models/
+.cache/huggingface/
+.cache/torch/
+
+# Neo4j related (if using embedded)
+neo4j_data/
+neo4j_logs/
+
+# OpenAI/LLM API keys and secrets (additional protection)
+openai_key.txt
+anthropic_key.txt
+*.key
+
+# Runtime generated files
+mortgage-processor/test_*.py
+mortgage-processor/debug_*.py
+mortgage-processor/temp_*.py
+
+# Chat session data
+chat_sessions.db*
+mortgage_applications.db*
+
+# Development and testing artifacts
+.pytest_cache/
+.coverage*
+htmlcov/
+test-results/
+test_*.json

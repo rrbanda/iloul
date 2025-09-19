@@ -13,9 +13,13 @@ from typing import List
 import sys
 sys.path.append(str(Path(__file__).parent / "src"))
 
+import sys
+import os
+
+# Add src to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 from mortgage_processor.config import load_config
-from mortgage_processor.rag_endpoints import MortgageDocument, ingest_documents
-from mortgage_processor.agent import create_mortgage_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -104,7 +108,7 @@ async def main():
         logger.info(f"💡 Answer: {query_response.answer}")
         
     except Exception as e:
-        logger.error(f"❌ Ingestion failed: {e}")
+        logger.error(f" Ingestion failed: {e}")
         raise
 
 if __name__ == "__main__":

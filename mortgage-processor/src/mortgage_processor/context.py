@@ -12,7 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.store.memory import InMemoryStore
 
-from .workflow import create_mortgage_workflow
+from .graph import create_mortgage_graph
 
 @dataclass
 class MortgageContext:
@@ -49,7 +49,8 @@ class MortgageApplicationAgent:
         self.store = InMemoryStore()
         print("💾 Customer memory store initialized")
         
-        workflow = create_mortgage_workflow()
+        workflow = create_mortgage_graph()
+        # The new supervisor workflow returns a compiled graph from create_supervisor
         self.graph = workflow.compile(checkpointer=self.checkpointer, store=self.store)
     
     def chat(self, message: str, thread_id: str = "default", user_id: str = None, 

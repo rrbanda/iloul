@@ -5,7 +5,8 @@ app:
 
 # LlamaStack configuration
 llamastack:
-  base_url: "https://lss-lss.apps.prod.rhoai.rh-aiservices-bu.com"
+  base_url: "https://lss-lss.apps.prod.rhoai.rh-aiservices-bu.com/v1"
+  api_key: "67432c04730b9b163150e659d66c2b23"
   default_model: "llama-4-scout-17b-16e-w4a16"
 
 # LangGraph configuration (uses same model as LlamaStack)
@@ -15,10 +16,10 @@ langgraph:
   max_tokens: 2000
   workflow_timeout_minutes: 30
 
-# Vector database configuration
+# Vector database configuration (LlamaStack remote only)
 vector_db:
   default_db_id: "mortgage_docs"
-  provider: "faiss"
+  provider: "llamastack"
   embedding: "all-MiniLM-L6-v2"
   embedding_dimension: 384
   default_chunk_size: 512
