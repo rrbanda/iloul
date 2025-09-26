@@ -77,7 +77,7 @@ from .agents import (
     create_document_agent,
     create_appraisal_agent,
     create_underwriting_agent,
-    # create_supervisor_agent  # Temporarily commented out due to InjectedState issue
+    create_supervisor_agent
 )
 
 from .utils.db import initialize_connection
@@ -90,7 +90,7 @@ __all__ = [
     "create_document_agent", 
     "create_appraisal_agent",
     "create_underwriting_agent",
-    # "create_supervisor_agent",  # Temporarily commented out
+    "create_supervisor_agent",
     
     # Core utilities
     "initialize_connection",
