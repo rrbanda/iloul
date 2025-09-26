@@ -73,10 +73,8 @@ def guide_next_steps(guidance_request: str) -> str:
         # Initialize Neo4j connection
         if not initialize_connection():
             return "Error: Failed to connect to Neo4j database"
-    
-    connection = get_neo4j_connection()
-    
-    try:
+        
+        connection = get_neo4j_connection()
         # Get current stage details and next steps from Neo4j
         current_stage_info = _get_current_stage_info(current_stage, connection)
         if not current_stage_info:
