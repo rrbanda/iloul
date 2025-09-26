@@ -30,9 +30,9 @@ from langchain_core.tools import BaseTool
 
 # Import all implemented tools - 100% data-driven from Neo4j
 from .explain_loan_programs import explain_loan_programs, validate_tool as validate_explain_loan_programs
-from .recommend_loan_program_fixed import recommend_loan_program_fixed
+from .recommend_loan_program import recommend_loan_program
 from .check_qualification_requirements import check_qualification_requirements, validate_tool as validate_check_qualification_requirements
-from .guide_next_steps_fixed import guide_next_steps_fixed
+from .guide_next_steps import guide_next_steps
 
 
 def get_all_mortgage_advisor_tools() -> List[BaseTool]:
@@ -47,9 +47,9 @@ def get_all_mortgage_advisor_tools() -> List[BaseTool]:
     """
     return [
         explain_loan_programs,
-        recommend_loan_program_fixed,
+        recommend_loan_program,
         check_qualification_requirements,
-        guide_next_steps_fixed
+        guide_next_steps
     ]
 
 
@@ -59,9 +59,9 @@ def get_tool_descriptions() -> Dict[str, str]:
     """
     return {
         "explain_loan_programs": "Compare and explain different mortgage loan programs (FHA, VA, USDA, Conventional, Jumbo) using real Neo4j data",
-        "recommend_loan_program_fixed": "Provide personalized loan program recommendations based on borrower profile using Neo4j business rules",
+        "recommend_loan_program": "Provide personalized loan program recommendations based on borrower profile using Neo4j business rules",
         "check_qualification_requirements": "Analyze specific qualification requirements for loan programs and identify gaps using Neo4j data",
-        "guide_next_steps_fixed": "Provide step-by-step guidance for the mortgage application process using Neo4j process data"
+        "guide_next_steps": "Provide step-by-step guidance for the mortgage application process using Neo4j process data"
     }
 
 
@@ -71,18 +71,18 @@ def validate_all_tools() -> Dict[str, bool]:
     """
     results = {}
     results["explain_loan_programs"] = validate_explain_loan_programs()
-    results["recommend_loan_program_fixed"] = True  # Fixed tool doesn't have validation yet
+    results["recommend_loan_program"] = True  # Simplified tool doesn't have validation yet
     results["check_qualification_requirements"] = validate_check_qualification_requirements()
-    results["guide_next_steps_fixed"] = True  # Fixed tool doesn't have validation yet
+    results["guide_next_steps"] = True  # Simplified tool doesn't have validation yet
     return results
 
 
 __all__ = [
     # All 4 implemented tools
     "explain_loan_programs",
-    "recommend_loan_program_fixed", 
+    "recommend_loan_program", 
     "check_qualification_requirements",
-    "guide_next_steps_fixed",
+    "guide_next_steps",
     
     # Validation functions
     "validate_explain_loan_programs",

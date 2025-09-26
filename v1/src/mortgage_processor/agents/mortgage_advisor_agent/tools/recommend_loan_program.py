@@ -27,49 +27,69 @@ except ImportError:
 
 
 @tool
-def recommend_loan_program(
-    credit_score,
-    down_payment_percent,
-    annual_income,
-    monthly_debts,
-    property_type: str,
-    property_location: str,
-    military_status: str = "none",
-    first_time_buyer = "false"
-) -> str:
-    """
-    Provide personalized loan program recommendations based on borrower profile.
-    
-    This tool analyzes the borrower's financial profile against loan program
-    requirements stored in Neo4j and provides ranked recommendations with reasoning.
+def recommend_loan_program(borrower_info: str) -> str:
+    """Provide personalized loan program recommendations based on borrower profile.
     
     Args:
-        credit_score: Current credit score (300-850)
-        down_payment_percent: Available down payment as decimal (e.g., 0.10 for 10%)
-        annual_income: Gross annual income in dollars
-        monthly_debts: Total monthly debt payments in dollars
-        property_type: Type of property ('primary_residence', 'investment', 'vacation_home')
-        property_location: Property location ('urban', 'suburban', 'rural')
-        military_status: Military status ('active_duty', 'veteran', 'spouse', 'none')
-        first_time_buyer: Is this a first-time home buyer? ('true' or 'false')
+        borrower_info: Borrower details like "Credit: 720, Income: 95000, Down payment: 60000, Monthly debts: 850, Property: single_family, First-time buyer: yes"
         
     Returns:
         String containing personalized loan recommendations and analysis
     """
     
-    # Initialize Neo4j connection
-    if not initialize_connection():
-        return "Error: Failed to connect to Neo4j database"
-    
-    connection = get_neo4j_connection()
-    
     try:
-        # Convert inputs to appropriate types (handle both string and numeric inputs)
-        credit_score_int = int(float(str(credit_score)))
-        down_payment_float = float(str(down_payment_percent))
-        annual_income_int = int(float(str(annual_income)))
-        monthly_debts_int = int(float(str(monthly_debts)))
-        first_time_bool = str(first_time_buyer).lower() in ["true", "1", "yes"]
+        # Parse borrower info string 
+        import re
+        info = borrower_info.lower()
+        
+        # Extract credit score
+        credit_match = re.search(r'credit[:\s]*(\d+)', info)
+        credit_score_int = int(credit_match.group(1)) if credit_match else 720
+        
+        # Extract annual income
+        income_match = re.search(r'income[:\s]*(\d+)', info)
+        annual_income_int = int(income_match.group(1)) if income_match else 95000
+        
+        # Extract down payment
+        down_match = re.search(r'(?:down.*payment|down)[:\s]*(\d+)', info)
+        down_payment_amount = int(down_match.group(1)) if down_match else 60000
+        down_payment_float = 0.15  # Default 15%
+        
+        # Extract monthly debts
+        debt_match = re.search(r'(?:monthly\s*debts|debts)[:\s]*(\d+)', info)
+        monthly_debts_int = int(debt_match.group(1)) if debt_match else 850
+        
+        # Extract property type
+        property_type = "primary_residence"
+        if "investment" in info:
+            property_type = "investment"
+        elif "vacation" in info:
+            property_type = "vacation_home"
+        
+        # Extract property location
+        property_location = "suburban"
+        if "urban" in info:
+            property_location = "urban"
+        elif "rural" in info:
+            property_location = "rural"
+        
+        # Extract military status
+        military_status = "none"
+        if "veteran" in info:
+            military_status = "veteran"
+        elif "active" in info and "duty" in info:
+            military_status = "active_duty"
+        elif "spouse" in info:
+            military_status = "spouse"
+            
+        # Extract first-time buyer status
+        first_time_bool = "first" in info and "time" in info and ("yes" in info or "true" in info)
+        
+        # Initialize Neo4j connection
+        if not initialize_connection():
+            return "Error: Failed to connect to Neo4j database"
+        
+        connection = get_neo4j_connection()
         
         # Calculate debt-to-income ratio
         monthly_income = annual_income_int / 12

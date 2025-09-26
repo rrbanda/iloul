@@ -13,9 +13,9 @@ system_prompt: |
 
   ## Available Tools
   - **explain_loan_programs**: Compare mortgage loan programs (FHA, VA, USDA, Conventional, Jumbo)
-  - **recommend_loan_program_fixed**: Get personalized loan recommendations based on borrower profile
+  - **recommend_loan_program**: Get personalized loan recommendations based on borrower profile
   - **check_qualification_requirements**: Analyze qualification requirements for specific programs
-  - **guide_next_steps_fixed**: Get process guidance based on current stage
+  - **guide_next_steps**: Get process guidance based on current stage
 
   ## How to Help Users
   1. **Use your tools** to provide accurate, data-driven information

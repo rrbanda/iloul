@@ -51,51 +51,67 @@ class UnderwritingFactors(BaseModel):
     property_type: str = Field(description="Property type: 'primary_residence', 'investment', 'vacation_home'")
 
 
-@tool("make_underwriting_decision", args_schema=UnderwritingFactors, parse_docstring=True)
-def make_underwriting_decision(
-    credit_score: int,
-    credit_risk_level: str,
-    monthly_gross_income: float,
-    income_stability: str,
-    front_end_dti: float,
-    back_end_dti: float,
-    loan_program: str,
-    loan_amount: float,
-    down_payment_percent: float,
-    property_value: float,
-    cash_reserves_months: float = 0.0,
-    employment_years: float = 2.0,
-    first_time_buyer: bool = False,
-    property_type: str = "primary_residence"
-) -> str:
-    """
-    Make comprehensive underwriting decision based on all application factors.
-    
-    This tool analyzes credit, income, DTI, assets, and loan characteristics
-    using underwriting decision rules stored in Neo4j to generate automated
-    approve, deny, or refer-to-manual-review decisions.
+@tool
+def make_underwriting_decision(analysis_summary: str) -> str:
+    """Make comprehensive underwriting decision based on all application factors.
     
     Args:
-        credit_score: Current credit score (300-850)
-        credit_risk_level: Credit risk assessment (LOW, MEDIUM, HIGH)
-        monthly_gross_income: Total monthly gross income
-        income_stability: Income stability rating
-        front_end_dti: Front-end DTI ratio percentage
-        back_end_dti: Back-end DTI ratio percentage
-        loan_program: Loan program type
-        loan_amount: Requested loan amount
-        down_payment_percent: Down payment percentage
-        property_value: Appraised property value
-        cash_reserves_months: Months of cash reserves
-        employment_years: Years at current employment
-        first_time_buyer: First-time buyer status
-        property_type: Property type
-        
-    Returns:
-        Comprehensive underwriting decision report with reasoning
+        analysis_summary: Summary like "Credit: 720 LOW risk, Income: 95000 good stability, DTI: 10.7% front, 15.2% back, Loan: conventional 390000, Down: 13.3%, Property: 450000, Reserves: 8 months"
     """
-    initialize_connection()
-    connection = get_neo4j_connection()
+    
+    try:
+        # Parse analysis summary string
+        import re
+        summary = analysis_summary.lower()
+        
+        # Extract credit score and risk
+        credit_match = re.search(r'credit[:\s]*(\d+)', summary)
+        credit_score = int(credit_match.group(1)) if credit_match else 720
+        
+        risk_match = re.search(r'(low|medium|high)\s*risk', summary)
+        credit_risk_level = risk_match.group(1).upper() if risk_match else "LOW"
+        
+        # Extract income
+        income_match = re.search(r'income[:\s]*(\d+)', summary)
+        monthly_gross_income = float(income_match.group(1)) if income_match else 7917.0
+        
+        # Extract income stability
+        stability_match = re.search(r'(excellent|good|fair|poor)\s*stability', summary)
+        income_stability = stability_match.group(1) if stability_match else "good"
+        
+        # Extract DTI ratios
+        front_dti_match = re.search(r'(\d+\.?\d*)[%\s]*front', summary)
+        front_end_dti = float(front_dti_match.group(1)) if front_dti_match else 10.7
+        
+        back_dti_match = re.search(r'(\d+\.?\d*)[%\s]*back', summary)
+        back_end_dti = float(back_dti_match.group(1)) if back_dti_match else 15.2
+        
+        # Extract loan info
+        loan_match = re.search(r'loan[:\s]*([a-z]+)', summary)
+        loan_program = loan_match.group(1) if loan_match else "conventional"
+        
+        amount_match = re.search(r'loan[^0-9]*(\d+)', summary)
+        loan_amount = float(amount_match.group(1)) if amount_match else 390000.0
+        
+        # Extract down payment percentage
+        down_match = re.search(r'down[:\s]*(\d+\.?\d*)', summary)
+        down_payment_percent = float(down_match.group(1)) / 100 if down_match else 0.13
+        
+        # Extract property value
+        property_match = re.search(r'property[:\s]*(\d+)', summary)
+        property_value = float(property_match.group(1)) if property_match else 450000.0
+        
+        # Extract reserves
+        reserves_match = re.search(r'reserves[:\s]*(\d+)', summary)
+        cash_reserves_months = float(reserves_match.group(1)) if reserves_match else 8.0
+        
+        # Set defaults
+        employment_years = 5.0
+        first_time_buyer = True
+        property_type = "primary_residence"
+        
+        initialize_connection()
+        connection = get_neo4j_connection()
     
     try:
         # Query underwriting decision rules

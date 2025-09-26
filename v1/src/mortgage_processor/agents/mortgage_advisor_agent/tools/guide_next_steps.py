@@ -41,41 +41,38 @@ class NextStepsGuidanceRequest(BaseModel):
     )
 
 
-@tool("guide_next_steps", args_schema=NextStepsGuidanceRequest, parse_docstring=True)
-def guide_next_steps(
-    current_stage: str,
-    selected_loan_program: Optional[str] = None,
-    borrower_status: str = "first_time",
-    priority_focus: str = "timeline"
-) -> Dict[str, Any]:
-    """
-    Provides personalized step-by-step guidance for the mortgage application process.
-    
-    This tool uses Neo4j process data to provide stage-specific guidance including
-    next steps, timelines, documentation requirements, and preparation tips based on
-    the borrower's current position in the mortgage process.
+@tool
+def guide_next_steps(guidance_request: str) -> str:
+    """Provides personalized step-by-step guidance for the mortgage application process.
     
     Args:
-        current_stage: Current stage in the mortgage process
-        selected_loan_program: The loan program being pursued (optional)
-        borrower_status: Type of borrower (first-time, repeat, refinancing)
-        priority_focus: What the borrower wants to focus on (timeline, documentation, etc.)
-        
-    Returns:
-        Dict containing personalized next steps guidance including:
-        - immediate_next_steps: specific actions to take now
-        - upcoming_stages: what to expect in future stages
-        - documentation_checklist: required documents for next stage
-        - timeline_expectations: realistic timelines for completion
-        - preparation_tips: how to prepare for success
+        guidance_request: Request details like "Stage: application, Loan: FHA, Status: first_time, Focus: documentation"
     """
     
-    # Initialize Neo4j connection
-    if not initialize_connection():
-        return {
-            "error": "Failed to connect to Neo4j database",
-            "success": False
-        }
+    try:
+        # Parse guidance request string
+        import re
+        request = guidance_request.lower()
+        
+        # Extract current stage
+        stage_match = re.search(r'stage:\s*([a-z_]+)', request)
+        current_stage = stage_match.group(1) if stage_match else "pre_qualification"
+        
+        # Extract loan program
+        loan_match = re.search(r'loan:\s*([a-z]+)', request)
+        selected_loan_program = loan_match.group(1).upper() if loan_match else None
+        
+        # Extract borrower status
+        status_match = re.search(r'status:\s*([a-z_]+)', request)
+        borrower_status = status_match.group(1) if status_match else "first_time"
+        
+        # Extract priority focus
+        focus_match = re.search(r'focus:\s*([a-z_]+)', request)
+        priority_focus = focus_match.group(1) if focus_match else "timeline"
+        
+        # Initialize Neo4j connection
+        if not initialize_connection():
+            return "Error: Failed to connect to Neo4j database"
     
     connection = get_neo4j_connection()
     

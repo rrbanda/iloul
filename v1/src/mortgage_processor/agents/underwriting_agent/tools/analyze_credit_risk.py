@@ -38,39 +38,48 @@ class CreditAnalysisRequest(BaseModel):
     credit_history_years: float = Field(description="Length of credit history in years")
 
 
-@tool("analyze_credit_risk", args_schema=CreditAnalysisRequest, parse_docstring=True)
-def analyze_credit_risk(
-    credit_score: int,
-    loan_program: str,
-    bankruptcy_months_ago: Optional[int] = None,
-    foreclosure_months_ago: Optional[int] = None,
-    late_payments_12_months: Dict[str, int] = None,
-    open_collections: int = 0,
-    credit_history_years: float = 0.0
-) -> str:
-    """
-    Perform comprehensive credit risk analysis for mortgage underwriting.
-    
-    This tool evaluates the borrower's credit profile against underwriting rules
-    stored in Neo4j to determine credit risk level and approval likelihood.
+@tool
+def analyze_credit_risk(borrower_info: str) -> str:
+    """Perform comprehensive credit risk analysis for mortgage underwriting.
     
     Args:
-        credit_score: Current credit score (300-850)
-        loan_program: Loan program type (conventional, fha, va, usda, jumbo)
-        bankruptcy_months_ago: Months since bankruptcy discharge (if any)
-        foreclosure_months_ago: Months since foreclosure (if any)
-        late_payments_12_months: Late payment counts by severity
-        open_collections: Number of open collection accounts
-        credit_history_years: Length of credit history in years
-        
-    Returns:
-        Formatted credit risk analysis report with recommendations
+        borrower_info: Credit details like "Credit: 720, Loan: conventional, Bankruptcy: 36 months ago, Collections: 0, History: 8 years"
     """
-    if late_payments_12_months is None:
-        late_payments_12_months = {"30_day": 0, "60_day": 0, "90_day": 0}
     
-    initialize_connection()
-    connection = get_neo4j_connection()
+    try:
+        # Parse borrower info string
+        import re
+        info = borrower_info.lower()
+        
+        # Extract credit score
+        credit_match = re.search(r'credit[:\s]*(\d+)', info)
+        credit_score = int(credit_match.group(1)) if credit_match else 720
+        
+        # Extract loan program
+        loan_match = re.search(r'loan[:\s]*([a-z]+)', info)
+        loan_program = loan_match.group(1) if loan_match else "conventional"
+        
+        # Extract bankruptcy info
+        bankruptcy_match = re.search(r'bankruptcy[:\s]*(\d+)', info)
+        bankruptcy_months_ago = int(bankruptcy_match.group(1)) if bankruptcy_match else None
+        
+        # Extract foreclosure info
+        foreclosure_match = re.search(r'foreclosure[:\s]*(\d+)', info)
+        foreclosure_months_ago = int(foreclosure_match.group(1)) if foreclosure_match else None
+        
+        # Extract collections
+        collections_match = re.search(r'collections[:\s]*(\d+)', info)
+        open_collections = int(collections_match.group(1)) if collections_match else 0
+        
+        # Extract credit history
+        history_match = re.search(r'history[:\s]*(\d+)', info)
+        credit_history_years = float(history_match.group(1)) if history_match else 8.0
+        
+        # Set default late payments
+        late_payments_12_months = {"30_day": 0, "60_day": 0, "90_day": 0}
+        
+        initialize_connection()
+        connection = get_neo4j_connection()
     
     try:
         # Query underwriting rules for credit analysis
