@@ -112,8 +112,6 @@ def make_underwriting_decision(analysis_summary: str) -> str:
         
         initialize_connection()
         connection = get_neo4j_connection()
-    
-    try:
         # Query underwriting decision rules
         decision_rules_query = """
         MATCH (r:UnderwritingRule) 

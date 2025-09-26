@@ -80,8 +80,6 @@ def analyze_credit_risk(borrower_info: str) -> str:
         
         initialize_connection()
         connection = get_neo4j_connection()
-    
-    try:
         # Query underwriting rules for credit analysis
         credit_rules_query = """
         MATCH (r:UnderwritingRule) 
