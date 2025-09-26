@@ -7,17 +7,10 @@ Connects to running server at http://127.0.0.1:2024
 """
 
 import sys
-from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.table import Table
-from rich.live import Live
-from rich.layout import Layout
-from rich.align import Align
 import time
-import json
 import requests
 from datetime import datetime
 
@@ -290,10 +283,10 @@ def show_execution_details(result, step_name):
                     business_tools_found.append('Neo4j Business Rule Analysis')
                     
                     tool_text = Text()
-                    tool_text.append("\n🎯  NEO4J BUSINESS ANALYSIS ACTIVE:  ", style="bold bright_green")
-                    tool_text.append("REAL BUSINESS RULES", style="bright_white")
+                    tool_text.append("\n🎯  BUSINESS ANALYSIS ACTIVE:  ", style="bold bright_green")
+                    tool_text.append("BUSINESS RULES", style="bright_white")
                     tool_text.append("  🎯\n", style="bold bright_green")
-                    tool_text.append(f"\n    📊 Agent is using Neo4j mortgage business rules\n", style="bright_cyan")
+                    tool_text.append(f"\n    📊 Agent is using mortgage business rules\n", style="bright_cyan")
                     tool_text.append(f"    🔍 Analysis result detected in response\n", style="bright_cyan")
                     
                     console.print(Panel(
@@ -472,109 +465,9 @@ def display_graph_structure():
     console.print()
     console.print()
 
-def create_state_tracker():
-    """Create a live state tracker layout"""
-    layout = Layout()
-    
-    layout.split_column(
-        Layout(name="header", size=3),
-        Layout(name="body", size=8),
-        Layout(name="footer", size=3)
-    )
-    
-    return layout
-
-def update_state_display(layout, current_state, last_tool=None, next_transition=None):
-    """Update the live state display - LARGE for screen sharing"""
-    # Header - Current State (LARGE)
-    header_text = Text()
-    if current_state:
-        header_text.append("\n🔄  CURRENTLY EXECUTING:  ", style="bold bright_cyan")
-        header_text.append(f"{current_state.upper()}", style="bold bright_white")
-        header_text.append("  🔄\n", style="bold bright_cyan")
-    else:
-        header_text.append("\n⏳  WAITING FOR EXECUTION...  ⏳\n", style="bold bright_yellow")
-    
-    layout["header"].update(Panel(
-        header_text,
-        border_style="bright_cyan",
-        padding=(1, 3),
-        title="[bold bright_white]🎯 CURRENT STATE 🎯[/bold bright_white]",
-        title_align="center"
-    ))
-    
-    # Body - Tool Information (LARGE)
-    tool_text = Text()
-    if last_tool:
-        tool_text.append("\n🛠️  TOOL EXECUTED:\n\n", style="bold bright_green")
-        tool_text.append("• Name: ", style="bright_yellow")
-        tool_text.append(f"{last_tool['name']}\n", style="bold bright_white")
-        tool_text.append("• Purpose: ", style="bright_yellow")
-        tool_text.append(f"{last_tool.get('description', 'Processing request')}\n", style="bright_white")
-        tool_text.append("• Status: ", style="bright_yellow")
-        tool_text.append("COMPLETED ✅\n", style="bold bright_green")
-    else:
-        tool_text.append("\n⏳  No tools executed yet...\n", style="dim bright_white")
-    
-    layout["body"].update(Panel(
-        tool_text,
-        title="[bold bright_green]🔧 TOOL EXECUTION 🔧[/bold bright_green]",
-        border_style="bright_green",
-        padding=(1, 2),
-        title_align="center"
-    ))
-    
-    # Footer - Next Transition (LARGE)
-    footer_text = Text()
-    if next_transition:
-        footer_text.append("\n➡️  NEXT STEP:  ", style="bold bright_magenta")
-        footer_text.append(f"{next_transition.upper()}", style="bold bright_white")
-        footer_text.append("  ➡️\n", style="bold bright_magenta")
-    else:
-        footer_text.append("\n🏁  READY FOR NEXT STEP  🏁\n", style="bold bright_green")
-    
-    layout["footer"].update(Panel(
-        footer_text,
-        border_style="bright_magenta",
-        padding=(1, 3),
-        title="[bold bright_white]🚀 NEXT TRANSITION 🚀[/bold bright_white]",
-        title_align="center"
-    ))
-
-def extract_state_info(result):
-    """Extract current state and tool information from agent result"""
-    current_agent = None
-    last_tool = None
-    
-    if not result or "messages" not in result:
-        return current_agent, last_tool
-    
-    messages = result["messages"]
-    
-    for msg in reversed(messages):  # Process in reverse to get latest info
-        msg_type = msg.get("type", "")
-        
-        # Extract current agent from tool calls or agent names
-        if msg_type == "ai" and msg.get("name"):
-            current_agent = msg.get("name")
-            
-            # Check for tool calls
-            if "tool_calls" in msg and msg["tool_calls"]:
-                tool_call = msg["tool_calls"][0]  # Get first tool call
-                last_tool = {
-                    "name": tool_call.get("name", "Unknown"),
-                    "description": "Business rule analysis" if "recommend_loan" in tool_call.get("name", "") else "Agent coordination"
-                }
-                break
-        
-        elif msg_type == "tool":
-            if not last_tool:  # Only set if we haven't found a tool yet
-                last_tool = {
-                    "name": msg.get("name", "Unknown"),
-                    "description": "Processing completed"
-                }
-    
-    return current_agent, last_tool
+def show_compact_progress(message, style="bold bright_cyan"):
+    """Show a compact progress indicator without taking up permanent space"""
+    console.print(f"\n{message}", style=style, justify="center")
 
 def auto_demo():
     """Run automated demonstration using agent system API - OPTIMIZED FOR SCREEN SHARING"""
@@ -672,22 +565,10 @@ def auto_demo():
     
     affordability_message = "I'm Sarah Johnson, a first-time homebuyer. I make $95,000 annually as a software engineer and have $60,000 saved. I have $850 in monthly debts. How much house can I afford and what would my monthly payments be for different loan amounts?"
     
-    # Create state tracker for live updates
-    state_layout = create_state_tracker()
+    # Progress indicator for affordability analysis
+    show_compact_progress("🔄 Analyzing affordability with mortgage advisor...", "bold bright_cyan")
     
-    with Live(state_layout, console=console, screen=False, auto_refresh=True) as live:
-        # Update state: Starting affordability analysis
-        update_state_display(state_layout, "supervisor", None, "Transfer to mortgage_advisor_agent")
-        live.update(state_layout)
-        time.sleep(1)
-        
-        result_1 = invoke_assistant(assistant_id, thread_id, affordability_message)
-        
-        # Extract and display current state
-        current_agent, last_tool = extract_state_info(result_1)
-        update_state_display(state_layout, current_agent, last_tool, "Analysis complete")
-        live.update(state_layout)
-        time.sleep(2)
+    result_1 = invoke_assistant(assistant_id, thread_id, affordability_message)
     
     show_execution_details(result_1, "AFFORDABILITY ANALYSIS")
     
@@ -718,22 +599,10 @@ def auto_demo():
     
     loan_comparison = """Based on my profile - 720 credit score, $95,000 income, $60,000 down payment, $850 monthly debts, first-time buyer looking at a $450,000 suburban single-family home - what specific loan programs am I eligible for? I want to understand FHA vs Conventional vs VA options, down payment requirements, and qualification details."""
     
-    # Live state tracking for loan program analysis
-    with Live(state_layout, console=console, screen=False, auto_refresh=True) as live:
-        # Update state: Starting loan program comparison
-        update_state_display(state_layout, "supervisor", None, "Delegating to mortgage_advisor_agent")
-        live.update(state_layout)
-        time.sleep(1)
-        
-        result_2 = invoke_assistant(assistant_id, thread_id, loan_comparison)
-        
-        # Extract and display final state
-        current_agent, last_tool = extract_state_info(result_2)
-        if last_tool and "recommend_loan_program" in last_tool.get("name", ""):
-            last_tool["description"] = "Neo4j Business Rule Analysis - Real loan qualification data"
-        update_state_display(state_layout, current_agent, last_tool, "Loan analysis complete")
-        live.update(state_layout)
-        time.sleep(2)
+    # Progress indicator for loan program analysis
+    show_compact_progress("🔄 Comparing loan programs with Neo4j business rules...", "bold bright_cyan")
+    
+    result_2 = invoke_assistant(assistant_id, thread_id, loan_comparison)
     
     show_execution_details(result_2, "LOAN PROGRAM COMPARISON")
     
@@ -806,7 +675,7 @@ What documents do I need to provide and what's the next step?"""
                     ))
                     
             # Check for storage confirmation
-            if "AGENTIC STORAGE" in content or "stored in Neo4j" in content:
+            if "STORAGE" in content or "stored in Neo4j" in content:
                 storage_confirmed = True
     
     # Show storage status
@@ -816,7 +685,7 @@ What documents do I need to provide and what's the next step?"""
             f"✅ Saved to Neo4j database\n"
             f"✅ Available for all agents\n"
             f"✅ Cross-agent workflow enabled",
-            title="[bold bright_white]💾 AGENTIC STORAGE CONFIRMED 💾[/bold bright_white]",
+            title="[bold bright_white]💾 DATA STORAGE CONFIRMED 💾[/bold bright_white]",
             border_style="bright_cyan",
             padding=(0, 2)
         ))
@@ -889,13 +758,13 @@ What documents do I need to provide and what's the next step?"""
     result_5 = invoke_assistant(assistant_id, thread_id, underwriting)
     show_execution_details(result_5, "UNDERWRITING DECISION")
     
-    console.print(Panel("🎯 [bold green]Step 5 Complete: Final underwriting decision via Neo4j rules[/bold green]", border_style="green"))
+    console.print(Panel("🎯 [bold green]Step 5 Complete: Final underwriting decision[/bold green]", border_style="green"))
     
     # Summary
     console.print(Panel(
-        "[bold blue]📊 Realistic Mortgage Journey Summary[/bold blue]\n" +
+        "[bold blue]📊 Mortgage Journey Summary[/bold blue]\n" +
         "🎯 Step 1: Affordability analysis with income/debt calculations\n" +
-        "🎯 Step 2: Loan program comparison using Neo4j business rules\n" +
+        "🎯 Step 2: Loan program comparison using business rules\n" +
         "🎯 Step 3: Pre-approval application with document requirements\n" +
         "🎯 Step 4: Document preparation guidance and checklist\n" +
         "🎯 Step 5: Complete underwriting analysis and final decision\n" +
@@ -904,12 +773,11 @@ What documents do I need to provide and what's the next step?"""
     ))
     
     console.print(Panel(
-        "[bold green]🎉 Realistic Mortgage Journey Complete![/bold green]\n" +
+        "[bold green]🎉 Mortgage Journey Complete![/bold green]\n" +
         "Demonstrated step-by-step mortgage process with:\n" +
         "• Affordability analysis • Loan program comparison\n" +
         "• Pre-approval process • Document preparation\n" +
-        "• Underwriting analysis • Final lending decision\n\n" +
-        "All powered by Neo4j business rules and agentic workflow!",
+        "• Underwriting analysis • Final lending decision",
         border_style="green"
     ))
     
