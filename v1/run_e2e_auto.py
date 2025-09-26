@@ -254,7 +254,7 @@ def show_execution_details(result, step_name):
             # Method 2: Fallback - look for tool calls in content (for API format differences)
             elif content and any(tool in content.lower() for tool in ['recommend_loan_program', 'explain_loan', 'guide_next_steps']):
                 # Extract tool name from content
-                for tool in ['recommend_loan_program_fixed', 'explain_loan_programs', 'guide_next_steps_fixed']:
+                for tool in ['recommend_loan_program', 'explain_loan_programs', 'guide_next_steps']:
                     if tool in content.lower():
                         business_tools_found.append(tool)
                         
