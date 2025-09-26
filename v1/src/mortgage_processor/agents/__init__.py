@@ -22,7 +22,8 @@ from .mortgage_advisor_agent import create_mortgage_advisor_agent
 from .document_agent import create_document_agent
 from .appraisal_agent import create_appraisal_agent
 from .underwriting_agent import create_underwriting_agent
-from .supervisor_agent import create_supervisor_agent
+# Temporarily commented out due to InjectedState import issue
+# from .supervisor_agent import create_supervisor_agent
 
 # Import validation functions where available
 try:
@@ -64,8 +65,8 @@ __all__ = [
     "create_appraisal_agent",
     "create_underwriting_agent",
     
-    # Coordination layer (1 supervisor)
-    "create_supervisor_agent"
+    # Coordination layer (1 supervisor) - temporarily commented out
+    # "create_supervisor_agent"
 ]
 
 # Add validation functions that are available
