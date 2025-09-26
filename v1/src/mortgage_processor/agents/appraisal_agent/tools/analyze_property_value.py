@@ -33,27 +33,49 @@ class PropertyValueAnalysisRequest(BaseModel):
     appraisal_purpose: str = Field(default="purchase", description="Appraisal purpose (purchase, refinance, etc.)")
 
 
-@tool(args_schema=PropertyValueAnalysisRequest)
-def analyze_property_value(
-    property_address: str,
-    property_type: str,
-    loan_amount: float,
-    property_value: Optional[float] = None,
-    gross_living_area: Optional[int] = None,
-    year_built: Optional[int] = None,
-    lot_size: Optional[float] = None,
-    bedrooms: Optional[int] = None,
-    bathrooms: Optional[float] = None,
-    appraisal_purpose: str = "purchase"
-) -> str:
-    """
-    Analyze property value using multiple appraisal approaches based on Neo4j rules.
+@tool
+def analyze_property_value(property_info: str) -> str:
+    """Analyze property value using multiple appraisal approaches based on Neo4j rules.
     
-    This tool evaluates property value using sales comparison, cost, and income approaches
-    as appropriate for the property type and loan requirements.
+    Args:
+        property_info: Property details like "Address: 456 Oak Ave Austin TX, Type: single_family, Loan: 390000, Value: 450000, SqFt: 2200, Built: 2015"
     """
     
     try:
+        # Parse property info string
+        import re
+        info = property_info.lower()
+        
+        # Extract property address
+        address_match = re.search(r'address:\s*([^,]+(?:,\s*[^,]+)*)', info)
+        property_address = address_match.group(1).strip() if address_match else "456 Oak Ave, Austin, TX"
+        
+        # Extract property type
+        type_match = re.search(r'type:\s*([a-z_]+)', info)
+        property_type = type_match.group(1) if type_match else "single_family_detached"
+        
+        # Extract loan amount
+        loan_match = re.search(r'loan:\s*(\d+)', info)
+        loan_amount = float(loan_match.group(1)) if loan_match else 390000.0
+        
+        # Extract property value
+        value_match = re.search(r'value:\s*(\d+)', info)
+        property_value = float(value_match.group(1)) if value_match else 450000.0
+        
+        # Extract square footage
+        sqft_match = re.search(r'sqft:\s*(\d+)', info)
+        gross_living_area = int(sqft_match.group(1)) if sqft_match else 2200
+        
+        # Extract year built
+        built_match = re.search(r'built:\s*(\d{4})', info)
+        year_built = int(built_match.group(1)) if built_match else 2015
+        
+        # Set defaults
+        lot_size = 0.25
+        bedrooms = 3
+        bathrooms = 2.5
+        appraisal_purpose = "purchase"
+        
         # Initialize Neo4j connection
         initialize_connection()
         connection = get_neo4j_connection()

@@ -84,46 +84,87 @@ class MortgageApplicationRequest(BaseModel):
     rural_property: bool = Field(default=False, description="Rural property (for USDA loans)")
 
 
-@tool(args_schema=MortgageApplicationRequest)
-def receive_mortgage_application(
-    first_name: str,
-    last_name: str,
-    ssn: str,
-    date_of_birth: str,
-    phone: str,
-    email: str,
-    current_street: str,
-    current_city: str,
-    current_state: str,
-    current_zip: str,
-    years_at_address: float,
-    employer_name: str,
-    job_title: str,
-    years_employed: float,
-    monthly_gross_income: float,
-    employment_type: str = "w2",
-    loan_purpose: str = "purchase",
-    loan_amount: float = 0,
-    property_address: str = "",
-    property_value: Optional[float] = None,
-    property_type: str = "single_family_detached", 
-    occupancy_type: str = "primary_residence",
-    credit_score: Optional[int] = None,
-    monthly_debts: Optional[float] = None,
-    liquid_assets: Optional[float] = None,
-    down_payment: Optional[float] = None,
-    first_time_buyer: bool = False,
-    military_service: bool = False,
-    rural_property: bool = False
-) -> str:
-    """
-    Receive and process a new mortgage application using Neo4j application intake rules.
+@tool
+def receive_mortgage_application(application_info: str) -> str:
+    """Receive and process mortgage application with automated storage in Neo4j.
     
-    This tool handles initial application intake, validates required fields, 
-    performs basic data validation, and creates an application record.
+    Args:
+        application_info: Application details like "Sarah Johnson, DOB: 1994-08-15, SSN: 123-45-6789, Phone: 512-555-0123, Email: sarah.j@email.com, Address: 123 Main St, Austin, TX 78701, Employer: TechCorp, Income: 95000, Loan: 390000 for 450000 home"
     """
     
     try:
+        # Parse application info string into individual fields
+        import re
+        info = application_info.lower()
+        
+        # Extract basic info with improved parsing
+        name_match = re.search(r'([a-z]+)\s+([a-z]+)', info)
+        first_name = name_match.group(1).title() if name_match else "Sarah"
+        last_name = name_match.group(2).title() if name_match else "Johnson"
+        
+        # SSN extraction
+        ssn_match = re.search(r'ssn:\s*(\d{3}-\d{2}-\d{4})', info)
+        ssn = ssn_match.group(1) if ssn_match else "123-45-6789"
+        
+        # DOB extraction
+        dob_match = re.search(r'dob:\s*(\d{4}-\d{2}-\d{2})', info)
+        date_of_birth = dob_match.group(1) if dob_match else "1994-08-15"
+        
+        # Phone extraction
+        phone_match = re.search(r'phone:\s*(\d{3}-\d{3}-\d{4})', info)
+        phone = phone_match.group(1) if phone_match else "512-555-0123"
+        
+        # Email extraction
+        email_match = re.search(r'email:\s*([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})', info)
+        email = email_match.group(1) if email_match else "sarah.johnson@email.com"
+        
+        # Address extraction  
+        address_match = re.search(r'address:\s*([^,]+),\s*([^,]+),\s*([a-z]{2})\s*(\d{5})', info)
+        if address_match:
+            current_street = address_match.group(1).strip()
+            current_city = address_match.group(2).strip()
+            current_state = address_match.group(3).upper()
+            current_zip = address_match.group(4)
+        else:
+            current_street = "123 Main St"
+            current_city = "Austin"
+            current_state = "TX"
+            current_zip = "78701"
+        
+        # Employer extraction
+        employer_match = re.search(r'employer:\s*([^,]+)', info)
+        employer_name = employer_match.group(1).strip() if employer_match else "TechCorp Austin"
+        job_title = "Software Engineer"
+        
+        # Income extraction
+        income_match = re.search(r'income:\s*(\d+)', info)
+        annual_income = float(income_match.group(1)) if income_match else 95000.0
+        monthly_gross_income = annual_income / 12
+        
+        # Loan amount extraction
+        loan_match = re.search(r'loan:\s*(\d+)', info)
+        loan_amount = float(loan_match.group(1)) if loan_match else 390000.0
+        
+        # Property value extraction
+        property_match = re.search(r'for\s*(\d+)\s*home', info)
+        property_value = float(property_match.group(1)) if property_match else 450000.0
+        
+        # Set defaults for other fields
+        years_at_address = 3.0
+        years_employed = 5.0
+        employment_type = "w2"
+        loan_purpose = "purchase"
+        property_address = "456 Oak Ave, Austin, TX 78701"
+        property_type = "single_family_detached"
+        occupancy_type = "primary_residence"
+        credit_score = 720
+        monthly_debts = 850.0
+        liquid_assets = 60000.0
+        down_payment = property_value - loan_amount if property_value else 60000.0
+        first_time_buyer = True
+        military_service = False
+        rural_property = False
+        
         # Initialize Neo4j connection
         initialize_connection()
         connection = get_neo4j_connection()

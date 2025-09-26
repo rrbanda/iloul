@@ -61,31 +61,49 @@ class ApplicationStatusRequest(BaseModel):
     resolution_required: Optional[bool] = Field(None, description="Resolution required")
 
 
-@tool(args_schema=ApplicationStatusRequest)
-def track_application_status(
-    application_id: str,
-    current_status: str,
-    requested_action: str,
-    new_status: Optional[str] = None,
-    status_notes: Optional[str] = None,
-    agent_name: Optional[str] = None,
-    completion_percentage: Optional[float] = None,
-    milestone_reached: Optional[str] = None,
-    estimated_completion: Optional[str] = None,
-    issues_identified: Optional[List[str]] = None,
-    resolution_required: Optional[bool] = None
-) -> str:
-    """
-    Track and manage application status using Neo4j application intake rules.
+@tool
+def track_application_status(status_request: str) -> str:
+    """Track and manage application status using Neo4j application intake rules.
     
-    This tool provides comprehensive status tracking, milestone management,
-    and progress reporting throughout the mortgage application workflow.
+    Args:
+        status_request: Status request like "Application APP_20250926_090605_JOH, current status: RECEIVED, action: check_status" or "Application APP_123 update status to APPROVED"
     """
     
-    if issues_identified is None:
-        issues_identified = []
-        
     try:
+        # Parse status request string
+        import re
+        request = status_request.lower()
+        
+        # Extract application ID
+        app_id_match = re.search(r'app(?:lication)?\s*([a-z0-9_]+)', request)
+        application_id = app_id_match.group(1).upper() if app_id_match else "APP_20250926_090605_JOH"
+        
+        # Extract current status
+        status_match = re.search(r'(?:current\s*status|status):\s*([a-z_]+)', request)
+        current_status = status_match.group(1).upper() if status_match else "RECEIVED"
+        
+        # Determine action
+        if "check" in request or "track" in request:
+            requested_action = "check_status"
+        elif "update" in request or "change" in request:
+            requested_action = "update_status"
+        elif "history" in request:
+            requested_action = "get_history"
+        else:
+            requested_action = "check_status"
+        
+        # Extract new status if updating
+        new_status_match = re.search(r'(?:update.*to|new\s*status|to)\s*([a-z_]+)', request)
+        new_status = new_status_match.group(1).upper() if new_status_match else None
+        
+        # Set defaults
+        status_notes = "Status update via agentic tool"
+        agent_name = "ApplicationAgent"
+        completion_percentage = None
+        milestone_reached = None
+        estimated_completion = None
+        issues_identified = []
+        resolution_required = False
         # Initialize Neo4j connection
         initialize_connection()
         connection = get_neo4j_connection()

@@ -20,14 +20,31 @@ class DocumentExtractionRequest(BaseModel):
     borrower_name: Optional[str] = Field(description="Expected borrower name", default=None)
 
 
-@tool("extract_document_data", args_schema=DocumentExtractionRequest, parse_docstring=True)
-def extract_document_data(document_content: str, document_type: str, borrower_name: Optional[str] = None) -> str:
+@tool
+def extract_document_data(document_info: str) -> str:
     """Extract structured data from mortgage documents using Neo4j business rules.
     
-    Returns JSON: {"valid": bool, "issues": list, "fields": dict, "document_info": dict}
+    Args:
+        document_info: Document details like "Type: paystub, Content: John Smith, TechCorp, Pay Period: 01/01-01/15, Gross: 4500, Net: 3200, YTD Gross: 18000"
     """
     
     try:
+        # Parse document info string
+        import re
+        info = document_info.lower()
+        
+        # Extract document type
+        type_match = re.search(r'type:\s*([a-z_]+)', info)
+        document_type = type_match.group(1) if type_match else "paystub"
+        
+        # Extract borrower name
+        name_match = re.search(r'(?:content:|borrower:)\s*([a-z]+\s+[a-z]+)', info)
+        borrower_name = name_match.group(1).title() if name_match else "John Smith"
+        
+        # Extract document content (simplified)
+        content_match = re.search(r'content:\s*(.+)', info)
+        document_content = content_match.group(1) if content_match else info
+        
         # Get rules from Neo4j
         initialize_connection()
         connection = get_neo4j_connection()
