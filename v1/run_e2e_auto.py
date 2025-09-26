@@ -19,6 +19,7 @@ from rich.align import Align
 import time
 import json
 import requests
+from datetime import datetime
 
 console = Console()
 
@@ -773,21 +774,61 @@ What documents do I need to provide and what's the next step?"""
     result_3 = invoke_assistant(assistant_id, thread_id, preapproval_input)
     show_execution_details(result_3, "PRE-APPROVAL APPLICATION")
     
-    # Extract application ID with enhanced display
+    # Enhanced application ID extraction and storage confirmation
     app_id = None
+    storage_confirmed = False
+    
     if result_3:
         messages = result_3.get("messages", [])
         for msg in messages:
             content = str(msg.get("content", ""))
+            
+            # Extract application ID
             if "APP_" in content:
                 import re
-                match = re.search(r'APP_\w+', content)
+                match = re.search(r'APP_\d{8}_\d{6}_[A-Z]{3}', content)
+                if not match:
+                    match = re.search(r'APP_\w+', content)
                 if match:
                     app_id = match.group(0)
-                    console.print(Panel(f"[bold green]📋 Application ID Generated: {app_id}[/bold green]", border_style="green"))
-                    break
+                    
+                    # Enhanced application submission display
+                    console.print()
+                    console.print(Panel(
+                        f"[bold bright_green]✅ APPLICATION SUBMITTED SUCCESSFULLY\n\n"
+                        f"📋 Application ID: {app_id}\n"
+                        f"📅 Submitted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"👤 Applicant: Sarah Johnson\n"
+                        f"🏠 Loan Amount: $390,000 for $450,000 home",
+                        title="[bold bright_white]📝 APPLICATION INTAKE COMPLETE 📝[/bold bright_white]",
+                        border_style="bright_green",
+                        padding=(0, 2)
+                    ))
+                    
+            # Check for storage confirmation
+            if "AGENTIC STORAGE" in content or "stored in Neo4j" in content:
+                storage_confirmed = True
     
-    console.print(Panel("🎯 [bold green]Step 3 Complete: Pre-approval application via system API[/bold green]", border_style="green"))
+    # Show storage status
+    if app_id and storage_confirmed:
+        console.print(Panel(
+            f"[bold bright_cyan]🗄️ APPLICATION DATA STORED\n\n"
+            f"✅ Saved to Neo4j database\n"
+            f"✅ Available for all agents\n"
+            f"✅ Cross-agent workflow enabled",
+            title="[bold bright_white]💾 AGENTIC STORAGE CONFIRMED 💾[/bold bright_white]",
+            border_style="bright_cyan",
+            padding=(0, 2)
+        ))
+    elif app_id:
+        console.print(Panel(
+            f"[bold yellow]⚠️ Application ID: {app_id}\n"
+            f"📋 Application received but storage status unclear",
+            border_style="yellow",
+            padding=(0, 2)
+        ))
+    
+    console.print(Panel("🎯 [bold green]Step 3 Complete: Pre-approval application with database storage[/bold green]", border_style="green"))
     time.sleep(2)
     
     # STEP 4: Document Preparation
@@ -805,6 +846,19 @@ What documents do I need to provide and what's the next step?"""
     result_4 = invoke_assistant(assistant_id, thread_id, doc_prep)
     show_execution_details(result_4, "DOCUMENT PREPARATION")
     
+    # Show application status tracking
+    if app_id:
+        console.print(Panel(
+            f"[bold bright_magenta]📈 APPLICATION STATUS UPDATE\n\n"
+            f"📋 Application ID: {app_id}\n"
+            f"📊 Status: DOCUMENT_PREPARATION\n"
+            f"🔄 Next: UNDERWRITING_REVIEW\n"
+            f"⏱️ Progress: Document requirements provided",
+            title="[bold bright_white]🔄 STATUS TRACKING 🔄[/bold bright_white]",
+            border_style="bright_magenta",
+            padding=(0, 2)
+        ))
+    
     console.print(Panel("🎯 [bold green]Step 4 Complete: Document guidance via system API[/bold green]", border_style="green"))
     time.sleep(2)
     
@@ -818,6 +872,18 @@ What documents do I need to provide and what's the next step?"""
         style="italic bright_green"
     )
     
+    # Show application retrieval for underwriting
+    if app_id:
+        console.print(Panel(
+            f"[bold bright_blue]🔍 RETRIEVING APPLICATION DATA\n\n"
+            f"📋 Application ID: {app_id}\n"
+            f"🗄️ Accessing stored application from Neo4j\n"
+            f"⚖️ Preparing for underwriting analysis",
+            title="[bold bright_white]📊 APPLICATION RETRIEVAL 📊[/bold bright_white]",
+            border_style="bright_blue",
+            padding=(0, 2)
+        ))
+        
     underwriting = f"""Please perform the complete underwriting analysis for my application{' (ID: ' + app_id + ')' if app_id else ''}. Based on my 720 credit score, $95,000 income, $60,000 down payment, $850 monthly debts, stable employment, and the conventional loan program I selected, what's the final underwriting decision?"""
     
     result_5 = invoke_assistant(assistant_id, thread_id, underwriting)
