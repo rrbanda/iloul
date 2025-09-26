@@ -40,14 +40,9 @@ def typewriter_effect(text, delay=0.03, style="bold green"):
     console.print()  # Extra spacing
     time.sleep(0.8)  # Longer pause for screen sharing
 
-def create_status_spinner(message):
-    """Create a spinner for status updates"""
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True
-    )
+def show_status_update(message):
+    """Show a simple status update without permanent display"""
+    console.print(f"⏳ {message}", style="bold bright_yellow")
 
 def print_section_header(title, icon, color="cyan"):
     """Print a compact section header"""
@@ -487,49 +482,43 @@ def auto_demo():
     ))
     
     # Enhanced system status check
-    with create_status_spinner("Connecting to agent system...") as progress:
-        task = progress.add_task("Checking system status...", total=None)
-        if not check_server_status():
-            progress.stop()
-            console.print(Panel("[bold red]❌ Agent system not accessible at http://127.0.0.1:2024[/bold red]", border_style="red"))
-            console.print("[yellow]Please ensure the agent system is running[/yellow]")
-            return
-        progress.update(task, description="Connected successfully!")
-        time.sleep(1)
+    show_status_update("Connecting to agent system...")
+    if not check_server_status():
+        console.print(Panel("[bold red]❌ Agent system not accessible at http://127.0.0.1:2024[/bold red]", border_style="red"))
+        console.print("[yellow]Please ensure the agent system is running[/yellow]")
+        return
+    console.print("✅ Connected successfully!", style="bright_green")
+    time.sleep(1)
     
     console.print("🎯 [bold green]Connected to agent system[/bold green]")
     
     # Display graph structure
     display_graph_structure()
     
-    # Create demo assistant with spinner
-    with create_status_spinner("Setting up demo environment...") as progress:
-        task = progress.add_task("Creating demo assistant...", total=None)
-        assistant_id = create_demo_assistant()
+    # Create demo assistant
+    show_status_update("Setting up demo environment...")
+    assistant_id = create_demo_assistant()
+    if not assistant_id:
+        console.print("⏳ Fallback: Finding existing assistant...", style="bright_yellow")
+        assistant_id = get_assistant()
         if not assistant_id:
-            progress.update(task, description="Fallback: Finding existing assistant...")
-            assistant_id = get_assistant()
-            if not assistant_id:
-                progress.stop()
-                console.print(Panel("[bold red]❌ Failed to find any mortgage processing assistant[/bold red]", border_style="red"))
-                return
-            progress.update(task, description="Using existing assistant")
-        else:
-            progress.update(task, description="Demo assistant created!")
-        time.sleep(1)
+            console.print(Panel("[bold red]❌ Failed to find any mortgage processing assistant[/bold red]", border_style="red"))
+            return
+        console.print("✅ Using existing assistant", style="bright_green")
+    else:
+        console.print("✅ Demo assistant created!", style="bright_green")
+    time.sleep(1)
     
     console.print(f"🎯 [bold green]Assistant ready: {assistant_id}[/bold green]")
     
-    # Create conversation thread with spinner
-    with create_status_spinner("Initializing conversation...") as progress:
-        task = progress.add_task("Creating thread...", total=None)
-        thread_id = create_thread()
-        if not thread_id:
-            progress.stop()
-            console.print(Panel("[bold red]❌ Failed to create conversation thread[/bold red]", border_style="red"))
-            return
-        progress.update(task, description="Thread created!")
-        time.sleep(1)
+    # Create conversation thread
+    show_status_update("Initializing conversation...")
+    thread_id = create_thread()
+    if not thread_id:
+        console.print(Panel("[bold red]❌ Failed to create conversation thread[/bold red]", border_style="red"))
+        return
+    console.print("✅ Thread created!", style="bright_green")
+    time.sleep(1)
     
     console.print(f"🎯 [bold green]Conversation ready: {thread_id}[/bold green]")
     
@@ -781,16 +770,15 @@ What documents do I need to provide and what's the next step?"""
         border_style="green"
     ))
     
-    # Clean up demo assistant with enhanced display
+    # Clean up demo assistant
     console.print("\n")
-    with create_status_spinner("Cleaning up demo environment...") as progress:
-        task = progress.add_task("Removing demo assistant...", total=None)
-        cleanup_success = delete_demo_assistant(assistant_id)
-        if cleanup_success:
-            progress.update(task, description="Demo assistant cleaned up!")
-        else:
-            progress.update(task, description="Cleanup completed (assistant may be external)")
-        time.sleep(1)
+    show_status_update("Cleaning up demo environment...")
+    cleanup_success = delete_demo_assistant(assistant_id)
+    if cleanup_success:
+        console.print("✅ Demo assistant cleaned up!", style="bright_green")
+    else:
+        console.print("✅ Cleanup completed (assistant may be external)", style="bright_green")
+    time.sleep(1)
     
     # LARGE final message for screen sharing
     final_text = Text()
