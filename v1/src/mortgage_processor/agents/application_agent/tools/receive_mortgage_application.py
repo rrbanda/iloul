@@ -13,15 +13,19 @@ from langchain_core.tools import tool
 from datetime import datetime
 
 try:
-    from mortgage_processor.utils.db import get_neo4j_connection, initialize_connection
-    from database.application_data import store_application_data, MortgageApplicationData
+    from mortgage_processor.utils.db import (
+        get_neo4j_connection, 
+        initialize_connection,
+        store_application_data, 
+        MortgageApplicationData
+    )
 except ImportError:
-    from ....utils.db import get_neo4j_connection, initialize_connection
-    # Fallback import for agentic storage
-    import sys
-    from pathlib import Path
-    sys.path.append(str(Path(__file__).parent.parent.parent.parent.parent.parent))
-    from database.application_data import store_application_data, MortgageApplicationData
+    from ....utils.db import (
+        get_neo4j_connection, 
+        initialize_connection,
+        store_application_data, 
+        MortgageApplicationData
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -85,85 +89,146 @@ class MortgageApplicationRequest(BaseModel):
 
 
 @tool
-def receive_mortgage_application(application_info: str) -> str:
-    """Receive and process mortgage application with automated storage in Neo4j.
+def receive_mortgage_application(
+    first_name: str,
+    last_name: str,
+    date_of_birth: str,
+    ssn: str,
+    phone: str,
+    email: str,
+    current_street: str,
+    current_city: str,
+    current_state: str,
+    current_zip: str,
+    years_at_address: float,
+    employer_name: str,
+    job_title: str,
+    years_employed: float,
+    monthly_gross_income: float,
+    employment_type: str,
+    loan_purpose: str,
+    loan_amount: float,
+    property_address: str,
+    property_value: float,
+    property_type: str,
+    occupancy_type: str,
+    middle_name: str = "",
+    marital_status: str = "Single",
+    credit_score: int = 0,
+    monthly_debts: float = 0,
+    liquid_assets: float = 0,
+    down_payment: float = 0,
+    first_time_buyer: bool = False,
+    military_service: bool = False,
+    rural_property: bool = False
+) -> str:
+    """Process complete mortgage application with real customer data.
+    
+    This tool should ONLY be called after collecting all required information from the customer.
+    NEVER call this tool with fake or assumed data.
     
     Args:
-        application_info: Application details like "Sarah Johnson, DOB: 1994-08-15, SSN: 123-45-6789, Phone: 512-555-0123, Email: sarah.j@email.com, Address: 123 Main St, Austin, TX 78701, Employer: TechCorp, Income: 95000, Loan: 390000 for 450000 home"
+        first_name: Customer's first name
+        last_name: Customer's last name
+        date_of_birth: Date of birth (YYYY-MM-DD format)
+        ssn: Social Security Number (xxx-xx-xxxx format)
+        phone: Phone number
+        email: Email address
+        current_street: Current street address
+        current_city: Current city
+        current_state: Current state (2-letter abbreviation)
+        current_zip: ZIP code
+        years_at_address: Years at current address
+        employer_name: Current employer name
+        job_title: Job title/position
+        years_employed: Years with current employer
+        monthly_gross_income: Monthly gross income
+        employment_type: Employment type (w2, self_employed, contract)
+        loan_purpose: Loan purpose (purchase, refinance, etc.)
+        loan_amount: Requested loan amount
+        property_address: Property address
+        property_value: Property value
+        property_type: Property type
+        occupancy_type: How property will be used
+        middle_name: Middle name (optional)
+        marital_status: Marital status (optional)
+        credit_score: Credit score (optional)
+        monthly_debts: Monthly debt payments (optional)
+        liquid_assets: Available assets (optional)
+        down_payment: Down payment amount (optional)
+        first_time_buyer: First-time buyer status (optional)
+        military_service: Military service status (optional)
+        rural_property: Rural property status (optional)
     """
     
     try:
-        # Parse application info string into individual fields
+        # Validate required fields
+        required_fields = {
+            'first_name': first_name,
+            'last_name': last_name,
+            'date_of_birth': date_of_birth,
+            'ssn': ssn,
+            'phone': phone,
+            'email': email,
+            'current_street': current_street,
+            'current_city': current_city,
+            'current_state': current_state,
+            'current_zip': current_zip,
+            'employer_name': employer_name,
+            'job_title': job_title,
+            'loan_purpose': loan_purpose,
+            'property_address': property_address,
+            'property_type': property_type,
+            'occupancy_type': occupancy_type
+        }
+        
+        # Check for missing required fields
+        missing_fields = [field for field, value in required_fields.items() if not value or str(value).strip() == ""]
+        
+        if missing_fields:
+            return f"""
+❌ **APPLICATION INCOMPLETE**
+
+The following required information is missing:
+{chr(10).join([f'• {field.replace("_", " ").title()}' for field in missing_fields])}
+
+Please collect this information from the customer before submitting the application.
+Ask the customer for each missing piece of information, then call this tool again with complete data.
+"""
+        
+        # Validate field formats
         import re
-        info = application_info.lower()
+        validation_errors = []
         
-        # Extract basic info with improved parsing
-        name_match = re.search(r'([a-z]+)\s+([a-z]+)', info)
-        first_name = name_match.group(1).title() if name_match else "Sarah"
-        last_name = name_match.group(2).title() if name_match else "Johnson"
-        
-        # SSN extraction
-        ssn_match = re.search(r'ssn:\s*(\d{3}-\d{2}-\d{4})', info)
-        ssn = ssn_match.group(1) if ssn_match else "123-45-6789"
-        
-        # DOB extraction
-        dob_match = re.search(r'dob:\s*(\d{4}-\d{2}-\d{2})', info)
-        date_of_birth = dob_match.group(1) if dob_match else "1994-08-15"
-        
-        # Phone extraction
-        phone_match = re.search(r'phone:\s*(\d{3}-\d{3}-\d{4})', info)
-        phone = phone_match.group(1) if phone_match else "512-555-0123"
-        
-        # Email extraction
-        email_match = re.search(r'email:\s*([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})', info)
-        email = email_match.group(1) if email_match else "sarah.johnson@email.com"
-        
-        # Address extraction  
-        address_match = re.search(r'address:\s*([^,]+),\s*([^,]+),\s*([a-z]{2})\s*(\d{5})', info)
-        if address_match:
-            current_street = address_match.group(1).strip()
-            current_city = address_match.group(2).strip()
-            current_state = address_match.group(3).upper()
-            current_zip = address_match.group(4)
-        else:
-            current_street = "123 Main St"
-            current_city = "Austin"
-            current_state = "TX"
-            current_zip = "78701"
-        
-        # Employer extraction
-        employer_match = re.search(r'employer:\s*([^,]+)', info)
-        employer_name = employer_match.group(1).strip() if employer_match else "TechCorp Austin"
-        job_title = "Software Engineer"
-        
-        # Income extraction
-        income_match = re.search(r'income:\s*(\d+)', info)
-        annual_income = float(income_match.group(1)) if income_match else 95000.0
-        monthly_gross_income = annual_income / 12
-        
-        # Loan amount extraction
-        loan_match = re.search(r'loan:\s*(\d+)', info)
-        loan_amount = float(loan_match.group(1)) if loan_match else 390000.0
-        
-        # Property value extraction
-        property_match = re.search(r'for\s*(\d+)\s*home', info)
-        property_value = float(property_match.group(1)) if property_match else 450000.0
-        
-        # Set defaults for other fields
-        years_at_address = 3.0
-        years_employed = 5.0
-        employment_type = "w2"
-        loan_purpose = "purchase"
-        property_address = "456 Oak Ave, Austin, TX 78701"
-        property_type = "single_family_detached"
-        occupancy_type = "primary_residence"
-        credit_score = 720
-        monthly_debts = 850.0
-        liquid_assets = 60000.0
-        down_payment = property_value - loan_amount if property_value else 60000.0
-        first_time_buyer = True
-        military_service = False
-        rural_property = False
+        # SSN format validation
+        if not re.match(r'^\d{3}-\d{2}-\d{4}$', ssn):
+            validation_errors.append("• SSN must be in format xxx-xx-xxxx")
+            
+        # Date format validation
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_of_birth):
+            validation_errors.append("• Date of birth must be in format YYYY-MM-DD")
+            
+        # Email format validation
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            validation_errors.append("• Email address format is invalid")
+            
+        # State format validation
+        if len(current_state) != 2:
+            validation_errors.append("• State must be 2-letter abbreviation (e.g., TX, CA)")
+            
+        # ZIP format validation
+        if not re.match(r'^\d{5}(-\d{4})?$', current_zip):
+            validation_errors.append("• ZIP code must be 5 digits or 5+4 format")
+            
+        if validation_errors:
+            return f"""
+❌ **VALIDATION ERRORS**
+
+Please correct the following information:
+{chr(10).join(validation_errors)}
+
+Ask the customer to provide the correct information and call this tool again.
+"""
         
         # Initialize Neo4j connection
         initialize_connection()
@@ -328,8 +393,12 @@ def receive_mortgage_application(application_info: str) -> str:
             completed_fields += len(loan_fields)
             intake_report.append(f" Loan Details: {len(loan_fields)}/{len(loan_fields)} fields")
             
-            completion_percentage = (completed_fields / total_required) * 100
-            intake_report.append(f"📊 Overall Completion: {completion_percentage:.1f}%")
+            # Prevent division by zero
+            if total_required > 0:
+                completion_percentage = (completed_fields / total_required) * 100
+                intake_report.append(f"📊 Overall Completion: {completion_percentage:.1f}%")
+            else:
+                intake_report.append(f"📊 Overall Completion: No requirements configured")
         
         # Issues and Warnings
         if validation_issues:
@@ -422,7 +491,7 @@ def receive_mortgage_application(application_info: str) -> str:
             success, storage_result = store_application_data(app_data)
             
             if success:
-                intake_report.append(f"\n✅ AGENTIC STORAGE: Application stored in Neo4j for cross-agent workflow")
+                intake_report.append(f"\n AGENTIC STORAGE: Application stored in Neo4j for cross-agent workflow")
                 intake_report.append(f"   Storage ID: {storage_result}")
                 intake_report.append(f"   Available for: DocumentAgent, MortgageAdvisorAgent, UnderwritingAgent")
             else:
